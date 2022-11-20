@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message DungeonChallengeFinishNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 919;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 challengeIndex = 1;
+	bool isSuccess = 2;
+}

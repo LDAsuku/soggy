@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "MailTextContent.proto";
+import "EquipParam.proto";
+
+message MailData {
+	uint32 mailId = 1;
+	uint32 index = 2;
+	uint32 textId = 3;
+	MailTextContent mailTextContent = 4;
+	repeated EquipParam itemList = 7;
+	uint32 sendTime = 8;
+	uint32 expireTime = 9;
+	uint32 importance = 10;
+	bool isRead = 11;
+	bool isAttachmentGot = 12;
+}

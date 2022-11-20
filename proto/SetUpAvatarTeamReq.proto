@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "AvatarTeam.proto";
+
+message SetUpAvatarTeamReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 114;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 teamId = 1;
+	AvatarTeam avatarTeam = 2;
+	uint64 curAvatarGuid = 3;
+}

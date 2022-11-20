@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "ItemHint.proto";
+import "Vector.proto";
+
+message ItemAddHintNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 605;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	repeated ItemHint itemList = 1;
+	Vector position = 2;
+	bool isPositionValid = 3;
+	uint32 reason = 4;
+	uint32 questId = 5;
+}

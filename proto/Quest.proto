@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+message Quest {
+	uint32 questId = 1;
+	uint32 state = 2;
+	uint32 startTime = 4;
+	bool isRandom = 5;
+	uint32 parentQuestId = 6;
+	uint32 questConfigId = 7;
+	uint32 startGameTime = 8;
+}

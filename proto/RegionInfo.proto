@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message RegionInfo {
+	string gateserverIp = 1;
+	uint32 gateserverPort = 2;
+	string clientCustomConfig = 3;
+	string regionCustomConfig = 4;
+	string accountUrl = 5;
+	string accountUrlBak = 6;
+	string payCallbackUrl = 7;
+	string resourceUrl = 8;
+	string dataUrl = 9;
+	string feedbackUrl = 10;
+	string bulletinUrl = 11;
+	string resourceUrlBak = 12;
+	string dataUrlBak = 13;
+	uint32 dataVersion = 14;
+	uint32 resVersion = 15;
+	string handbookUrl = 16;
+}

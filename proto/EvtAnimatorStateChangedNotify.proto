@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "ForwardType.proto";
+
+message EvtAnimatorStateChangedNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 311;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	ForwardType forwardType = 1;
+	uint32 entityId = 2;
+	uint32 toStateHash = 3;
+	uint32 normalizedTimeCompact = 4;
+	int32 faceAngleCompact = 5;
+}

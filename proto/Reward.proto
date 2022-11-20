@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "ItemParam.proto";
+
+message Reward {
+	uint32 rewardId = 1;
+	repeated ItemParam itemList = 2;
+}

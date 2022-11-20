@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "ParamList.proto";
+
+message DungeonSettleNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 910;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 dungeonId = 1;
+	bool isSuccess = 2;
+	repeated uint32 failCondList = 3;
+	map<uint32, ParamList> settleShow = 4;
+	uint32 closeTime = 5;
+}

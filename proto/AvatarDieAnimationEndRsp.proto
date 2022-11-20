@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message AvatarDieAnimationEndRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 138;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint64 dieGuid = 2;
+	uint32 skillId = 3;
+}

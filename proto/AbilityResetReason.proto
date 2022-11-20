@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "AbilityResetReasonType.proto";
+
+message AbilityResetReason {
+	AbilityResetReasonType reasonType = 1;
+	uint32 param = 2;
+}

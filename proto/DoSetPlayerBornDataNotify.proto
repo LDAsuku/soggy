@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+message DoSetPlayerBornDataNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 133;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+}

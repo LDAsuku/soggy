@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message LogTalkNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 414;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 talkId = 1;
+	bool isStart = 2;
+}

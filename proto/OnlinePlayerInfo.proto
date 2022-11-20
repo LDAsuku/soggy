@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+import "OnlinePlayerState.proto";
+
+message OnlinePlayerInfo {
+	uint32 uid = 1;
+	string nickname = 2;
+	OnlinePlayerState state = 3;
+}

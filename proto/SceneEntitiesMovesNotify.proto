@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+import "EntityMoveInfo.proto";
+
+message SceneEntitiesMovesNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 3001;
+		ENET_CHANNEL_ID = 1;
+		ENET_IS_RELIABLE = 0;
+	}
+	repeated EntityMoveInfo entityMoveInfoList = 1;
+}

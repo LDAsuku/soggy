@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message AttackHitEffectResult {
+	uint32 hitEffLevel = 1;
+	float retreatStrength = 2;
+	float airStrength = 3;
+	float hitHaltTime = 4;
+	float hitHaltTimeScale = 5;
+}

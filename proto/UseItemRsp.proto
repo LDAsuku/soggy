@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message UseItemRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 609;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint64 guid = 2;
+	uint32 itemId = 3;
+	uint64 targetGuid = 4;
+}

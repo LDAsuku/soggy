@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+import "RegionSimpleInfo.proto";
+
+message QueryRegionListHttpRsp {
+	int32 retcode = 1;
+	repeated RegionSimpleInfo regionList = 2;
+	string clientCustomConfig = 3;
+}

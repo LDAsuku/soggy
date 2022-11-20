@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "ItemParam.proto";
+
+message PlayerRandomCookReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 150;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	repeated ItemParam materialList = 1;
+}

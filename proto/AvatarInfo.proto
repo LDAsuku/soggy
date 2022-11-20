@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "PropValue.proto";
+import "TrialAvatarInfo.proto";
+import "AvatarSkillInfo.proto";
+
+message AvatarInfo {
+	uint32 avatarId = 1;
+	uint64 guid = 2;
+	map<uint32, PropValue> propMap = 3;
+	uint32 lifeState = 4;
+	repeated uint64 equipGuidList = 5;
+	repeated uint32 talentIdList = 6;
+	map<uint32, float> fightPropMap = 7;
+	bool isTrialAvatar = 8;
+	TrialAvatarInfo trialAvatarInfo = 9;
+	map<uint32, AvatarSkillInfo> skillMap = 10;
+	uint32 skillDepotId = 11;
+}

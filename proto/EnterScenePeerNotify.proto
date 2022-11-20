@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message EnterScenePeerNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 284;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 destSceneId = 1;
+	uint32 peerId = 2;
+	uint32 hostPeerId = 3;
+}

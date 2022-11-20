@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+message ItemHint {
+	uint32 itemId = 1;
+	uint32 count = 2;
+	bool isNew = 3;
+}

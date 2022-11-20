@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+enum AuthkeySignType {
+	AUTHKEY_SIGN_NONE = 0;
+	AUTHKEY_SIGN_DEFAULT = 1;
+	AUTHKEY_SIGN_RSA = 2;
+}

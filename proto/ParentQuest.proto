@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "ChildQuest.proto";
+import "ParentQuestRandomInfo.proto";
+
+message ParentQuest {
+	uint32 parentQuestId = 1;
+	repeated ChildQuest childQuestList = 2;
+	bool isFinished = 3;
+	bool isRandom = 4;
+	ParentQuestRandomInfo randomInfo = 5;
+}

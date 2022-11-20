@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message AbilityMixinWindZone {
+	repeated uint32 entityIds = 1;
+}

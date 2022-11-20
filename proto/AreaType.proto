@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+enum AreaType {
+	AREA_CN = 0;
+	AREA_JP = 1;
+	AREA_KR = 2;
+}

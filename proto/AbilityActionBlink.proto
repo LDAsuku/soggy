@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+import "Vector.proto";
+
+message AbilityActionBlink {
+	Vector pos = 1;
+}

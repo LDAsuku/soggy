@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+enum EnterType {
+	ENTER_NONE = 0;
+	ENTER_SELF = 1;
+	ENTER_GOTO = 2;
+	ENTER_JUMP = 3;
+	ENTER_OTHER = 4;
+	ENTER_BACK = 5;
+	ENTER_DUNGEON = 6;
+	ENTER_DUNGEON_REPLAY = 7;
+	ENTER_GOTO_BY_PORTAL = 8;
+}

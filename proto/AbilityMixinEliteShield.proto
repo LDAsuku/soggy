@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message AbilityMixinEliteShield {
+	float subShield = 1;
+}

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message ChallengeDataNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 920;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 challengeIndex = 1;
+	uint32 paramIndex = 2;
+	uint32 value = 3;
+}

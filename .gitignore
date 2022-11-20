@@ -1,0 +1,10 @@
+# builds
+/build*
+.cache/
+
+# user data
+.soggy_history
+
+# game data :eyes:
+/resources
+*.zip

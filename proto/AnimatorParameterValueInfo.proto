@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+message AnimatorParameterValueInfo {
+	oneof ParaVal {
+		int32 intVal = 2;
+		float floatVal = 3;
+		bool boolVal = 4;
+	}
+	uint32 paraType = 1;
+}

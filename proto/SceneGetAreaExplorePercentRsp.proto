@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message SceneGetAreaExplorePercentRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 239;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	float explorePercent = 2;
+	uint32 areaId = 3;
+}

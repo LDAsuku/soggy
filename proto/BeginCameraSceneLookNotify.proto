@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "Vector.proto";
+
+message BeginCameraSceneLookNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 247;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	Vector lookPos = 1;
+	float duration = 2;
+	bool isForce = 3;
+	bool isRecoverKeepCurrent = 4;
+}

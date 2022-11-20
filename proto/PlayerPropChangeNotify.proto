@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message PlayerPropChangeNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 139;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 propType = 1;
+	uint32 propDelta = 2;
+}

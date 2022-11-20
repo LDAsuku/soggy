@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+import "ForwardType.proto";
+import "HitColliderType.proto";
+import "Vector.proto";
+
+message EvtBulletHitNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 313;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	ForwardType forwardType = 1;
+	uint32 forwardPeer = 2;
+	uint32 entityId = 3;
+	uint32 hitEntityId = 4;
+	HitColliderType hitColliderType = 5;
+	int32 hitBoxIndex = 6;
+	Vector hitPoint = 7;
+	Vector hitNormal = 8;
+}

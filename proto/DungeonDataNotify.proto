@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message DungeonDataNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 917;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	map<uint32, uint32> dungeonDataMap = 1;
+}

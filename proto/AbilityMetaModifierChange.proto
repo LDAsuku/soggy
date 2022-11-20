@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "ModifierAction.proto";
+import "AbilityString.proto";
+import "AbilityAttachedModifier.proto";
+import "ModifierProperty.proto";
+
+message AbilityMetaModifierChange {
+	ModifierAction action = 1;
+	AbilityString parentAbilityName = 2;
+	AbilityString parentAbilityOverride = 3;
+	AbilityAttachedModifier attachedInstancedModifier = 4;
+	repeated ModifierProperty properties = 5;
+	int32 modifierLocalId = 6;
+	bool isMuteRemote = 7;
+	uint32 applyEntityId = 8;
+}

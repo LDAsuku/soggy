@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+message CompoundQueueData {
+	uint32 compoundId = 1;
+	uint32 outputCount = 2;
+	uint32 waitCount = 3;
+	uint32 outputTime = 4;
+}

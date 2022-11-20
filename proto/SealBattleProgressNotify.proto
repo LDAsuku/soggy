@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+message SealBattleProgressNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 266;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 sealEntityId = 1;
+	uint32 progress = 2;
+	uint32 maxProgress = 3;
+	uint32 endTime = 4;
+	uint32 sealRadius = 5;
+}

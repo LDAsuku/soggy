@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "SceneEntityInfo.proto";
+import "VisionType.proto";
+
+message SceneEntityAppearNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 206;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	repeated SceneEntityInfo entityList = 1;
+	VisionType appearType = 2;
+	uint32 param = 3;
+}

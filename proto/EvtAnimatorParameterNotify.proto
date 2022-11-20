@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+import "ForwardType.proto";
+import "AnimatorParameterValueInfo.proto";
+
+message EvtAnimatorParameterNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 302;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	ForwardType forwardType = 1;
+	uint32 entityId = 2;
+	int32 nameId = 3;
+	bool isServerCache = 4;
+	AnimatorParameterValueInfo value = 5;
+}

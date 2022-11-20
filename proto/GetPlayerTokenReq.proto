@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+message GetPlayerTokenReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 101;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 accountType = 1;
+	string accountUid = 2;
+	string accountToken = 3;
+	string accountExt = 4;
+	uint32 uid = 5;
+}

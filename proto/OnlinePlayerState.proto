@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+enum OnlinePlayerState {
+	ONLINE_PLAYER_NONE = 0;
+	ONLINE_PLAYER_IN_DYNAMIC_DUNGEON = 1;
+}

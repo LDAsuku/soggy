@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message AbilityInvokeEntryHead {
+	uint32 instancedAbilityId = 1;
+	uint32 instancedModifierId = 2;
+	int32 localId = 3;
+	int32 modifierConfigLocalId = 4;
+	uint32 targetId = 5;
+}

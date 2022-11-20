@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "PropValue.proto";
+
+message EntityPropNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 1201;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 entityId = 1;
+	map<uint32, PropValue> propMap = 2;
+}

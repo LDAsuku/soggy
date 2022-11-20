@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+import "Vector.proto";
+
+message ScenePlayerSoundNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 261;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	enum PlaySoundType {
+		PLAY_SOUND_NONE = 0;
+		PLAY_SOUND_START = 1;
+		PLAY_SOUND_STOP = 2;
+	}
+	string soundName = 1;
+	Vector playPos = 2;
+	PlaySoundType playType = 3;
+}

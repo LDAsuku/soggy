@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message AiSkillCdInfo {
+	map<uint32, uint32> skillCdMap = 1;
+}

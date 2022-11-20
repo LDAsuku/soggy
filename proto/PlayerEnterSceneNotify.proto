@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "Vector.proto";
+import "EnterType.proto";
+
+message PlayerEnterSceneNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 201;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 sceneId = 1;
+	Vector pos = 2;
+	uint64 sceneBeginTime = 3;
+	EnterType type = 4;
+	uint32 targetUid = 6;
+	uint32 prevSceneId = 9;
+	Vector prevPos = 10;
+	uint32 dungeonId = 11;
+}

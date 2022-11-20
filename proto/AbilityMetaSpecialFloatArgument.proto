@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message AbilityMetaSpecialFloatArgument {
+	float argumentValue = 1;
+	bool isOn = 2;
+}

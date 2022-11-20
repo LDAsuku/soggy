@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "CompoundQueueData.proto";
+
+message CompoundDataNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 161;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	repeated uint32 unlockCompoundList = 1;
+	repeated CompoundQueueData compoundQueDataList = 2;
+}

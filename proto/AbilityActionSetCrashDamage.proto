@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+import "Vector.proto";
+
+message AbilityActionSetCrashDamage {
+	float damage = 1;
+	Vector hitPos = 2;
+}

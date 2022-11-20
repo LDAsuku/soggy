@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+message AbilityGadgetInfo {
+	uint32 campId = 1;
+	uint32 campTargetType = 2;
+	uint32 targetEntityId = 3;
+}

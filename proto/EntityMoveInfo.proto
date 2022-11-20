@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+import "MotionInfo.proto";
+
+message EntityMoveInfo {
+	uint32 entityId = 1;
+	MotionInfo motionInfo = 2;
+	uint32 sceneTime = 3;
+	uint32 reliableSeq = 4;
+}

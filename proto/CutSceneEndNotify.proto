@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message CutSceneEndNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 297;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint32 cutsceneId = 2;
+}

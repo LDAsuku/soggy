@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+enum SvrMsgId {
+	MSG_UNKNOWN = 0;
+	MSG_BLOCK_REFRESH_COUNTDOWN = 1;
+	MSG_AVATAR_REVIVE_BY_STATUE = 2;
+}

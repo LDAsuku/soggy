@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+message ParentQuestRandomInfo {
+	uint32 entranceId = 1;
+	uint32 templateId = 2;
+	repeated uint32 factorList = 3;
+}

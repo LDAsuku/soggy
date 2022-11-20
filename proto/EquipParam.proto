@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+message EquipParam {
+	uint32 itemId = 1;
+	uint32 itemNum = 2;
+	uint32 itemLevel = 3;
+	uint32 promoteLevel = 4;
+}

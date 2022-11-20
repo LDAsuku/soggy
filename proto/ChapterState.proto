@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+enum ChapterState {
+	CHAPTER_INVALID = 0;
+	CHAPTER_UNABLE_TO_BEGIN = 1;
+	CHAPTER_BEGIN = 2;
+	CHAPTER_END = 3;
+}

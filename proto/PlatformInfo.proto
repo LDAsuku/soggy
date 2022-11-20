@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+import "Vector.proto";
+
+message PlatformInfo {
+	uint32 routeId = 1;
+	int32 startIndex = 2;
+	uint32 startRouteTime = 3;
+	uint32 startSceneTime = 4;
+	uint32 tempRouteTime = 5;
+	uint32 tempStartRouteTime = 6;
+	Vector startPos = 7;
+	bool isStarted = 8;
+}

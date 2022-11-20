@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+enum AbilityResetReasonType {
+	ABILITY_CHANGE_SKILL_DEPOT = 0;
+	ABILITY_UNLOCK_TALENT = 1;
+	ABILITY_CHANGE_EQUIP = 2;
+}

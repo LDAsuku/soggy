@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message AbilityMetaSetModifierApplyEntityId {
+	uint32 applyEntityId = 1;
+}

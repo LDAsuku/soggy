@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+import "StoreType.proto";
+import "Vector.proto";
+
+message DropItemReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 610;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	StoreType storeType = 1;
+	uint64 guid = 2;
+	uint32 count = 3;
+	Vector pos = 4;
+}

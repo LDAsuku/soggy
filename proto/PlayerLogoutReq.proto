@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+message PlayerLogoutReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 105;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	enum Reason {
+		DISCONNECT = 0;
+		CLIENT_REQ = 1;
+		TIMEOUT = 2;
+		ADMIN_REQ = 3;
+		SERVER_CLOSE = 4;
+		GM_CLEAR = 5;
+		PLAYER_TRANSFER = 6;
+	}
+	Reason reason = 1;
+}

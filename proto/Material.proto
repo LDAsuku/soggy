@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message Material {
+	uint32 count = 1;
+}

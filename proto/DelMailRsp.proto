@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message DelMailRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 1407;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 retcode = 1;
+	repeated uint32 mailIdList = 2;
+}

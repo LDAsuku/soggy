@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+message GetPlayerTokenRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 102;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	string msg = 2;
+	uint32 uid = 3;
+	string token = 4;
+	uint32 blackUidEndTime = 5;
+	uint32 accountType = 6;
+	string accountUid = 7;
+}

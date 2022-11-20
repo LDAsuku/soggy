@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+message ExecuteGadgetLuaReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 293;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 sourceEntityId = 1;
+	int32 param1 = 2;
+	int32 param2 = 3;
+	int32 param3 = 4;
+}

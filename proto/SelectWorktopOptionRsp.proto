@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message SelectWorktopOptionRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 806;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint32 gadgetEntityId = 2;
+	uint32 optionId = 3;
+}

@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message AvatarTeam {
+	repeated uint64 avatarGuidList = 1;
+}

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+import "Material.proto";
+import "Equip.proto";
+
+message Item {
+	oneof Detail {
+		Material material = 5;
+		Equip equip = 6;
+	}
+	uint32 itemId = 1;
+	uint64 guid = 2;
+}

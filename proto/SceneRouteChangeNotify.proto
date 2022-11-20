@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "SceneRouteChangeInfo.proto";
+
+message SceneRouteChangeNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 257;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 sceneId = 1;
+	repeated SceneRouteChangeInfo routeList = 2;
+	uint32 sceneTime = 3;
+}

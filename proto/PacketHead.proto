@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message PacketHead {
+	uint32 packetId = 1;
+	uint32 rpcId = 2;
+	uint32 clientSequenceId = 3;
+	uint32 enetChannelId = 4;
+	uint32 enetIsReliable = 5;
+	uint32 userId = 11;
+	uint32 userIp = 12;
+	uint32 userSessionId = 13;
+	uint64 recvTimeMs = 21;
+	uint32 rpcBeginTimeMs = 22;
+	uint32 targetService = 23;
+	uint32 dispatchIp = 24;
+	uint32 gameserverIp = 25;
+	uint32 nodeserverIp = 26;
+	uint32 dbgateIp = 27;
+	uint32 multiserverIp = 28;
+}

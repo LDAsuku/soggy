@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+enum MathExpressionType {
+	MATH_EXPR_NONE = 0;
+	MATH_EXPR_LEVEL = 1;
+	MATH_EXPR_REGISTER_TIME = 2;
+	MATH_EXPR_LAST_LOGIN_TIME = 3;
+	MATH_EXPR_TOTAL_LOGIN_DAYS = 4;
+}

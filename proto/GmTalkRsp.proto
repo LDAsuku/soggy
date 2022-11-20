@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message GmTalkRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 3;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	string msg = 2;
+	string retmsg = 3;
+}

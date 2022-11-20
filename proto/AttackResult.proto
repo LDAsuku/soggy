@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "AbilityIdentifier.proto";
+import "HitCollision.proto";
+import "Vector.proto";
+import "AttackHitEffectResult.proto";
+
+message AttackResult {
+	uint32 attackerId = 1;
+	uint32 defenseId = 2;
+	string animEventId = 3;
+	AbilityIdentifier abilityIdentifier = 4;
+	string attackTag = 5;
+	float damage = 6;
+	bool isCrit = 7;
+	HitCollision hitCollision = 8;
+	uint32 hitPosType = 9;
+	uint32 endureBreak = 10;
+	Vector resolvedDir = 11;
+	int32 hitRetreatAngleCompat = 12;
+	AttackHitEffectResult hitEffResult = 13;
+	uint32 elementType = 14;
+	float damagePercentage = 15;
+	float damageExtra = 16;
+	float bonusCritical = 17;
+	float bonusCriticalHurt = 18;
+	bool useGadgetDamageAction = 19;
+	uint32 gadgetDamageActionIdx = 20;
+	uint32 strikeType = 21;
+	bool isResistText = 22;
+	float criticalRand = 23;
+	float elementAmplifyRate = 24;
+}

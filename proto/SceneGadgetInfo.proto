@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+import "GadgetBornType.proto";
+import "Item.proto";
+import "WorktopInfo.proto";
+import "ClientGadgetInfo.proto";
+import "PlatformInfo.proto";
+import "WeatherInfo.proto";
+import "AbilityGadgetInfo.proto";
+
+message SceneGadgetInfo {
+	oneof Content {
+		Item trifleItem = 11;
+		uint32 itemId = 12;
+		WorktopInfo worktop = 13;
+		ClientGadgetInfo clientGadget = 14;
+		PlatformInfo platform = 15;
+		WeatherInfo weather = 16;
+		AbilityGadgetInfo abilityGadget = 17;
+	}
+	uint32 gadgetId = 1;
+	uint32 groupId = 2;
+	uint32 configId = 3;
+	uint32 ownerEntityId = 4;
+	GadgetBornType bornType = 5;
+	uint32 gadgetState = 6;
+	uint32 gadgetType = 7;
+	bool isShowCutscene = 8;
+	uint32 authorityPeerId = 9;
+	bool isEnableInteract = 10;
+}

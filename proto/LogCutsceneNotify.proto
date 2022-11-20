@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message LogCutsceneNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 415;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	string cutsceneName = 1;
+	bool isStart = 2;
+	bool isSkip = 3;
+}

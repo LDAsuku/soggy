@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message UnlockTransPointReq {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 3002;
+		ENET_CHANNEL_ID = 1;
+		ENET_IS_RELIABLE = 0;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 sceneId = 1;
+	uint32 pointId = 2;
+}

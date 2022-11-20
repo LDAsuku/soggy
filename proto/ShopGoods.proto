@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "ItemParam.proto";
+
+message ShopGoods {
+	uint32 goodsId = 1;
+	ItemParam goodsItem = 2;
+	uint32 scoin = 3;
+	uint32 hcoin = 4;
+	repeated ItemParam costItemList = 5;
+	uint32 boughtNum = 6;
+	uint32 buyLimit = 7;
+	uint32 beginTime = 8;
+	uint32 endTime = 9;
+	uint32 nextRefreshTime = 10;
+}

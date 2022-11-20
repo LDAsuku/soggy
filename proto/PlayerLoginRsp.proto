@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+message PlayerLoginRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 104;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	bytes playerData = 2;
+	bool isNewPlayer = 3;
+	uint32 targetUid = 4;
+	uint64 loginRand = 5;
+	bool isUseAbilityHash = 6;
+	int32 abilityHashCode = 7;
+	map<string, int32> abilityHashMap = 8;
+	uint32 dataVersion = 9;
+	uint32 resVersion = 10;
+	bool isRelogin = 11;
+}

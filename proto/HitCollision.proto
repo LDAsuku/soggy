@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "HitColliderType.proto";
+import "Vector.proto";
+
+message HitCollision {
+	HitColliderType hitColliderType = 1;
+	int32 hitBoxIndex = 2;
+	Vector hitPoint = 3;
+	Vector hitDir = 4;
+}

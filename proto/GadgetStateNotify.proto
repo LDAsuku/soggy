@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message GadgetStateNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 803;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	uint32 gadgetEntityId = 1;
+	uint32 gadgetState = 2;
+	bool isEnableInteract = 3;
+}

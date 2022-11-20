@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message WeaponPromoteRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 622;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint64 targetWeaponGuid = 2;
+	uint32 oldPromoteLevel = 3;
+	uint32 curPromoteLevel = 4;
+}

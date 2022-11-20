@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "AbilityString.proto";
+import "AbilityAttachedModifier.proto";
+
+message AbilityAppliedModifier {
+	int32 modifierLocalId = 1;
+	uint32 parentAbilityEntityId = 2;
+	AbilityString parentAbilityName = 3;
+	AbilityString parentAbilityOverride = 4;
+	uint32 instancedAbilityId = 5;
+	uint32 instancedModifierId = 6;
+	float existDuration = 7;
+	AbilityAttachedModifier attachedInstancedModifier = 8;
+	uint32 applyEntityId = 9;
+}

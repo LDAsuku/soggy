@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message WorktopInfo {
+	repeated uint32 optionList = 1;
+}

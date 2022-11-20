@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "Vector.proto";
+import "MotionState.proto";
+
+message MotionInfo {
+	Vector pos = 1;
+	Vector rot = 2;
+	Vector speed = 3;
+	MotionState state = 4;
+	repeated Vector params = 5;
+}

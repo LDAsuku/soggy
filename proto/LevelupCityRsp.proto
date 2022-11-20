@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "CityInfo.proto";
+
+message LevelupCityRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 256;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint32 sceneId = 2;
+	uint32 areaId = 3;
+	CityInfo cityInfo = 4;
+}

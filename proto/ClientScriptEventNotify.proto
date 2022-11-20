@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+message ClientScriptEventNotify {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 298;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+		IS_ALLOW_CLIENT = 1;
+	}
+	uint32 eventType = 1;
+	uint32 sourceEntityId = 2;
+	uint32 targetEntityId = 3;
+	repeated int32 paramList = 4;
+}

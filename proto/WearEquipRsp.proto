@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message WearEquipRsp {
+	enum CmdId {
+		option allow_alias = true;
+		NONE = 0;
+		CMD_ID = 615;
+		ENET_CHANNEL_ID = 0;
+		ENET_IS_RELIABLE = 1;
+	}
+	int32 retcode = 1;
+	uint64 avatarGuid = 2;
+	uint64 equipGuid = 3;
+}

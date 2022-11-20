@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+message ScenePlayerInfo {
+	uint32 uid = 1;
+	uint32 peerId = 2;
+	string name = 3;
+	bool isConnected = 4;
+}

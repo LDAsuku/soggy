@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+enum DungeonDataType {
+	DUNGEON_DATA_NONE = 0;
+	DUNGEON_DATA_END_TIME = 1;
+	DUNGEON_DATA_MONSTER_DIE_COUNT = 2;
+}
