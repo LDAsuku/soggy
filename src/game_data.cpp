@@ -17,11 +17,11 @@
 #include <nlohmann/json.hpp>
 
 // lua
-extern "C" {
+/*extern "C" {
 	#include <lua.h>
 	#include <lualib.h>
 	#include <lauxlib.h>
-}
+}*/
 
 // soggy
 #include "game_enums.hpp"
@@ -135,7 +135,7 @@ std::vector<int> Excel::get_ints(const std::string key) {
 // small wrapper for lua stack access
 //
 
-struct LuaIndex {
+/*struct LuaIndex {
 public:
 	LuaIndex(lua_State *L);
 	bool push_global_table(const char *global);
@@ -200,7 +200,7 @@ bool LuaIndex::get_field_bool(const char *key, bool def) {
 }
 void LuaIndex::pop(int n) {
 	lua_pop(this->L, n);
-}
+}*/
 
 //
 // binoutput json stuff

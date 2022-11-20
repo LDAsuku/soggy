@@ -1476,8 +1476,8 @@ void process_line_sub(char *c_line) {
 	if (c_line == NULL) {
 		// soggy_log("EOF");
 		// go = false;
-		rl_eof_found = false;
-		RL_UNSETSTATE(RL_STATE_EOF);
+		//rl_eof_found = false;
+		//RL_UNSETSTATE(RL_STATE_EOF);
 		return;
 	}
 	if (*c_line == '\0') {

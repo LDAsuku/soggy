@@ -26,10 +26,10 @@ target_compile_options(readline INTERFACE ${readline_CFLAGS})
 target_link_libraries(readline INTERFACE ${readline_LDFLAGS})
 
 # lua53
-pkg_check_modules(lua53 IMPORTED_TARGET lua53 REQUIRED)
-add_library(lua53 INTERFACE)
-target_compile_options(lua53 INTERFACE ${lua53_CFLAGS})
-target_link_libraries(lua53 INTERFACE ${lua53_LDFLAGS})
+#pkg_check_modules(lua53 IMPORTED_TARGET lua53 REQUIRED)
+#add_library(lua53 INTERFACE)
+#target_compile_options(lua53 INTERFACE ${lua53_CFLAGS})
+#target_link_libraries(lua53 INTERFACE ${lua53_LDFLAGS})
 
 # protos
 # use a shared library because linking a 100mb+ static library takes extremely long
@@ -69,4 +69,4 @@ set_target_properties(soggy PROPERTIES CXX_STANDARD "17")
 target_link_libraries(soggy PRIVATE soggy_proto)
 target_link_libraries(soggy PRIVATE libenet)
 target_link_libraries(soggy PRIVATE readline)
-target_link_libraries(soggy PRIVATE lua)
+#target_link_libraries(soggy PRIVATE lua)
