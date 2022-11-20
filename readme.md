@@ -10,9 +10,9 @@ server for that one game
 
 ```sh
 # install dependencies (ubuntu)
-apt install libenet-dev libprotobuf-dev liblua5.3-dev nlohmann-json3-dev libreadline-dev
+apt install build-essential cmake pkgconf libenet-dev libprotobuf-dev protobuf-compiler liblua5.3-dev nlohmann-json3-dev libreadline-dev
 # install dependencies (arch linux)
-pacman -S enet protobuf lua53 nlohmann-json readline
+pacman -S cmake pkgconf enet protobuf lua53 nlohmann-json readline
 # setup for build
 cmake -B build
 # build

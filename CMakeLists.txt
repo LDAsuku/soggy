@@ -1,6 +1,6 @@
 # CMakeLists.txt
 
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.13)
 
 project(soggy)
 
@@ -17,21 +17,19 @@ find_package(Protobuf REQUIRED)
 pkg_check_modules(libenet IMPORTED_TARGET libenet REQUIRED)
 add_library(libenet INTERFACE)
 target_compile_options(libenet INTERFACE ${libenet_CFLAGS})
-target_link_options(libenet INTERFACE ${libenet_LDFLAGS})
+target_link_libraries(libenet INTERFACE ${libenet_LDFLAGS})
 
 # readline
 pkg_check_modules(readline IMPORTED_TARGET readline REQUIRED)
 add_library(readline INTERFACE)
 target_compile_options(readline INTERFACE ${readline_CFLAGS})
-target_link_options(readline INTERFACE ${readline_LDFLAGS})
+target_link_libraries(readline INTERFACE ${readline_LDFLAGS})
 
-# lua
-# todo: check which version? require a specific version?
-# for reference: XLua implements lua 5.3
-pkg_check_modules(lua IMPORTED_TARGET lua REQUIRED)
-add_library(lua INTERFACE)
-target_compile_options(lua INTERFACE ${lua_CFLAGS})
-target_link_options(lua INTERFACE ${lua_LDFLAGS})
+# lua53
+pkg_check_modules(lua53 IMPORTED_TARGET lua53 REQUIRED)
+add_library(lua53 INTERFACE)
+target_compile_options(lua53 INTERFACE ${lua53_CFLAGS})
+target_link_libraries(lua53 INTERFACE ${lua53_LDFLAGS})
 
 # protos
 # use a shared library because linking a 100mb+ static library takes extremely long
@@ -68,7 +66,6 @@ add_executable(soggy
 target_include_directories(soggy PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(soggy PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/extern")
 set_target_properties(soggy PROPERTIES CXX_STANDARD "17")
-#target_link_options(soggy PRIVATE "-rdynamic")
 target_link_libraries(soggy PRIVATE soggy_proto)
 target_link_libraries(soggy PRIVATE libenet)
 target_link_libraries(soggy PRIVATE readline)

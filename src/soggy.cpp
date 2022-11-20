@@ -152,38 +152,45 @@ int get_new_entity_id(RuntimeIDCategory cat) {
 	return make_entity_id(cat, PLAYER_PEER_ID, ++seq[cat]);
 }
 
-struct YSAvatar;
-struct YSPlayerItem;
-struct YSEntity;
+struct YSPlayer;
 struct YSConnection;
 
-// scene related stuff may be moved to its own struct
-struct YSPlayer {
-	// runtime state
-	YSConnection *conn;
-	bool has_sent_avatardatanotify = false;
-	int scene = 0;
-	Vec3f current_pos;
-	Vec3f current_rot;
-	std::unordered_map<int, YSEntity> scene_entities;
-
+struct YSPlayerItem {
 	// persist data
-	int team_entity_id = 0;
-	std::unordered_map<int, YSAvatar> avatars;
-	std::unordered_map<int, int> equips_ref; // redundant; item guid -> avatar guid
-	std::unordered_map<int, int> avatars_by_id_ref; // redundant; avatar id -> avatar guid
-	std::vector<int> team_avatars;
-	int team_current_avatar_guid = 0;
-	std::unordered_map<int, YSPlayerItem> items;
+	int guid = 0;
+	int item_id = 0;
+	struct {
+		int count = 1;
+	} material;
+	struct {
+		int level = 1;
+		int exp = 1;
+		int promote_level = 0;
+	} weapon;
+	struct {
+		int level = 0;
+		int exp = 1;
+		int promote_level = 0;
+		int main_prop_id = 10001; // main stat (default hp)
+		std::vector<int> append_prop_ids; // substats
+	} reliquary;
 
 	// methods
-	YSAvatar *get_current_avatar();
-	YSAvatar *get_avatar_by_avatar_id(int avatar_id);
-	YSAvatar *get_avatar_by_guid(int guid);
-	void fill_player_props(google::protobuf::Map<uint32_t, PropValue> *prop_map);
-	YSAvatar *add_avatar(int avatar_id);
-	YSPlayerItem *add_item(int item_id);
-	int scene_add_entity(RuntimeIDCategory cat, YSEntity *entity);
+	const exceloutput::ItemData *get_excel() const;
+	void make_item_proto(Item *item) const;
+	void make_entity_info_proto(SceneEntityInfo *entityinfo) const;
+};
+
+struct YSEntity {
+	struct {
+		int gadget_id = 0;
+		int config_id = 0;
+		int route_id = 0;
+		bool has_sent_route_start_packet = false;
+	} gadget;
+	Vec3f pos;
+	Vec3f rot;
+	bool dead = false;
 };
 
 struct YSAvatar {
@@ -218,46 +225,33 @@ struct YSAvatar {
 	void recalc_talent_ids();
 };
 
-struct YSPlayerItem {
+// scene related stuff may be moved to its own struct
+struct YSPlayer {
+	// runtime state
+	YSConnection *conn;
+	bool has_sent_avatardatanotify = false;
+	int scene = 0;
+	Vec3f current_pos;
+	Vec3f current_rot;
+	std::unordered_map<int, YSEntity> scene_entities;
+
 	// persist data
-	int guid = 0;
-	int item_id = 0;
-	struct {
-		int count = 1;
-	} material;
-	struct {
-		int level = 1;
-		int exp = 1;
-		int promote_level = 0;
-	} weapon;
-	struct {
-		int level = 0;
-		int exp = 1;
-		int promote_level = 0;
-		int main_prop_id = 10001; // main stat (default hp)
-		std::vector<int> append_prop_ids; // substats
-	} reliquary;
+	int team_entity_id = 0;
+	std::unordered_map<int, YSAvatar> avatars;
+	std::unordered_map<int, int> equips_ref; // redundant; item guid -> avatar guid
+	std::unordered_map<int, int> avatars_by_id_ref; // redundant; avatar id -> avatar guid
+	std::vector<int> team_avatars;
+	int team_current_avatar_guid = 0;
+	std::unordered_map<int, YSPlayerItem> items;
 
 	// methods
-	const exceloutput::ItemData *get_excel() const;
-	void make_item_proto(Item *item) const;
-	void make_entity_info_proto(SceneEntityInfo *entityinfo) const;
-};
-
-struct YSScene {
-	
-};
-
-struct YSEntity {
-	struct {
-		int gadget_id = 0;
-		int config_id = 0;
-		int route_id = 0;
-		bool has_sent_route_start_packet = false;
-	} gadget;
-	Vec3f pos;
-	Vec3f rot;
-	bool dead = false;
+	YSAvatar *get_current_avatar();
+	YSAvatar *get_avatar_by_avatar_id(int avatar_id);
+	YSAvatar *get_avatar_by_guid(int guid);
+	void fill_player_props(google::protobuf::Map<uint32_t, PropValue> *prop_map);
+	YSAvatar *add_avatar(int avatar_id);
+	YSPlayerItem *add_item(int item_id);
+	int scene_add_entity(RuntimeIDCategory cat, YSEntity *entity);
 };
 
 struct YSConnection {
@@ -1174,7 +1168,7 @@ void handle_SetUpAvatarTeamReq(YSConnection *conn, const SetUpAvatarTeamReq *set
 	for (int guid : conn->player->team_avatars) {
 		avatarteam->add_avatarguidlist(guid);
 		YSAvatar *avatar = &conn->player->avatars.at(guid);
-		avatarteamupdatenotify.mutable_avatarentityidmap()->emplace(guid, avatar->avatar_entity_id);
+		avatarteamupdatenotify.mutable_avatarentityidmap()->insert({ (uint64_t)guid, (uint32_t)avatar->avatar_entity_id });
 	}
 	conn->send_packet(&avatarteamupdatenotify);
 
