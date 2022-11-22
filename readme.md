@@ -32,11 +32,13 @@ vcpkg install protobuf lua[cpp]:x64-windows
 
 Open the folder in Visual Studio and build it.
 
-## Building with MSYS/MinGW on Microsoft Windows
+## Building with MSYS2/MinGW on Microsoft Windows
+
+Use the MINGW64 terminal.
 
 ```sh
 # install dependencies
-pacman -S cmake x86_64-w64-protobuf x86_64-w64-lua
+pacman -S ${MINGW_PACKAGE_PREFIX}-{toolchain,cmake,protobuf,lua}
 # prepare for build
 cmake -B build -G "Unix Makefiles"
 # build

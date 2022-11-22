@@ -1525,6 +1525,11 @@ void interactive_main() {
 		interrupt.join();
 	});
 
+	{
+		std::ifstream historyf(history_file_name);
+		soggy_rx.history_load(historyf);
+	}
+
 	while (go) {
 		const char *line;
 		do {
@@ -1540,6 +1545,8 @@ void interactive_main() {
 			go = false;
 		}
 	}
+
+	soggy_rx.history_sync(history_file_name);
 }
 
 void non_interactive_main() {
