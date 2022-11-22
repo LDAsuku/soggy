@@ -1,6 +1,8 @@
 # builds
 /build*
+/out*
 .cache/
+.vs*
 
 # user data
 .soggy_history

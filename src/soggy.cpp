@@ -1,10 +1,5 @@
 // soggy.cpp
 
-// POSIX
-#include <unistd.h>
-#include <sys/poll.h>
-#include <sys/select.h>
-
 // C++
 #include <algorithm>
 #include <atomic>
@@ -17,13 +12,17 @@
 #include <vector>
 #include <iostream>
 #include <thread>
+#include <condition_variable>
+#include <mutex>
+#ifdef _WIN32
+#include <io.h>
+#endif
 
 // ENet
 #include <enet/enet.h>
 
-// readline
-#include <readline/readline.h>
-#include <readline/history.h>
+// replxx
+#include <replxx.hxx>
 
 // protobuf
 #include <google/protobuf/descriptor.h>
@@ -738,7 +737,7 @@ void handle_GetPlayerTokenReq(YSConnection *conn, const GetPlayerTokenReq *getpl
 	getplayertokenrsp.set_retcode(Retcode::RET_SUCC);
 	getplayertokenrsp.set_uid(PLAYER_UID);
 	getplayertokenrsp.set_token("token1");
-	getplayertokenrsp.set_accounttype(1); // AccountMihoyo
+	getplayertokenrsp.set_accounttype(1);
 	getplayertokenrsp.set_accountuid(std::to_string(PLAYER_UID));
 	conn->send_packet(&getplayertokenrsp);
 }
@@ -1026,8 +1025,6 @@ void handle_ChangeAvatarReq(YSConnection *conn, const ChangeAvatarReq *changeava
 	conn->send_packet(&changeavatarrsp);
 }
 
-// Dear Travelers~
-// Sorry for the short notice! We will be removing 5 star character [Kamisato Ayato] from the game tomorrow at 18:00 (UTC-8)! As compensation we will be sending out 5 mora. Stay homosexual
 void handle_GetAllMailReq(YSConnection *conn, const GetAllMailReq *getallmailreq) {
 	GetAllMailRsp getallmailrsp;
 	MailData *maildata = getallmailrsp.add_maillist();
@@ -1036,7 +1033,7 @@ void handle_GetAllMailReq(YSConnection *conn, const GetAllMailReq *getallmailreq
 	item->set_itemid(202); // mora
 	item->set_itemnum(5);
 	MailTextContent *mailtextcontent = maildata->mutable_mailtextcontent();
-	mailtextcontent->set_sender("Genshin Impact");
+	mailtextcontent->set_sender("\x47\x65\x6e\x73\x68\x69\x6e \x49\x6d\x70\x61\x63\x74");
 	mailtextcontent->set_title("Dear Travelers~");
 	mailtextcontent->set_content("Sorry for the short notice! We will be removing 5 star character <color=#00ffff>[Kamisato Ayaka]</color> from the game tomorrow at 18:00 (UTC-8)! As compensation we will be sending out 5 mora. Stay homosexual");
 	maildata->set_sendtime(1648800000); // apr 1, 2022
@@ -1228,10 +1225,17 @@ void exit_handler() {
 		enet_host_destroy(host);
 		host = NULL;
 	}
-	if (RL_ISSTATE(RL_STATE_INITIALIZED)) {
-		rl_cleanup_after_signal();
-		append_history(history_length - 1, history_file_name);
-	}
+	enet_deinitialize();
+}
+
+void print_error(const char *str) {
+#ifdef _WIN32
+	char msg[256];
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0, WSAGetLastError(), 0, msg, 256, 0);
+	printf("%s: %s\n", str, msg);
+#else
+	perror(str);
+#endif
 }
 
 void game_server_main() {
@@ -1243,7 +1247,7 @@ void game_server_main() {
 		// TODO: use poll to wait for data, or for an interrupt?
 		int ret = enet_host_service(host, &ev, 20); // setting this timeout to 0 blasts the cpu
 		if (ret < 0) {
-			perror("enet_host_service");
+			print_error("enet_host_service");
 			break;
 		}
 
@@ -1472,24 +1476,10 @@ void rlcmd_add_no_target(std::string label, soggy_rlcmd_proc_no_target proc) {
 	desc->proc_no_target = proc;
 }
 
-void process_line_sub(char *c_line) {
-	if (c_line == NULL) {
-		// soggy_log("EOF");
-		// go = false;
-		//rl_eof_found = false;
-		//RL_UNSETSTATE(RL_STATE_EOF);
+void execute_repl_line(std::string line) {
+	if (line[0] == '#') {
 		return;
 	}
-	if (*c_line == '\0') {
-		return;
-	}
-	if (*c_line == '#') {
-		return;
-	}
-	add_history(c_line);
-
-	std::string line(c_line);
-	free(c_line);
 
 	// target the main connection if it's online. otherwise have no target
 	// in the future this this would be changed with a "target" command, like in grasscutter
@@ -1515,20 +1505,8 @@ void process_line_sub(char *c_line) {
 	run_cmd(conn, cmdname, argline);
 }
 
-void process_line(char *line) {
-	process_line_sub(line);
-	if (!go) {
-		rl_callback_handler_remove();
-	}
-}
-
 void interactive_main() {
-	// interactive main: run the readline console
-
-	static bool sigint_handled = false;
-	struct sigaction act;
-	act.sa_handler = [](int) { sigint_handled = true; };
-	sigaction(SIGINT, &act, NULL);
+	// interactive main: run the repl
 
 	rlcmd_add_no_target("help", cmd_help);
 	rlcmd_add_no_target("stop", cmd_stop);
@@ -1536,48 +1514,48 @@ void interactive_main() {
 	rlcmd_add_with_target("se", cmd_switchelement);
 	rlcmd_add_with_target("pos", cmd_pos);
 
-	rl_readline_name = "soggy";
-	add_history("");
-	read_history(history_file_name);
-	// surround non-printing characters with \x01...\x02
-	rl_callback_handler_install("\x01\x1b[90m\x02soggy > \x01\x1b[0m\x02", process_line);
+	soggy_rx.install_window_change_handler();
 
-	// need to implement actual completion later
-	rl_completion_entry_function = [](const char *, int) -> char * { return NULL; };
-
-	struct pollfd pfd;
-	pfd.fd = STDIN_FILENO;
-	pfd.events = POLLIN;
+	signal(SIGINT, [](int) -> void {
+		std::thread interrupt([] {
+			soggy_rx.emulate_key_press(replxx::Replxx::KEY::control('U'));
+			soggy_rx.emulate_key_press(replxx::Replxx::KEY::control('K'));
+			soggy_rx.emulate_key_press(replxx::Replxx::KEY::control('D'));
+		});
+		interrupt.join();
+	});
 
 	while (go) {
-		// wait until stdin is readable, or for an interrupt
-		pfd.revents = 0;
-		poll(&pfd, 1, -1);
-
-		if (pfd.revents & POLLIN) {
-			// poll was interrupted by stdin being readable
-			rl_callback_read_char();
-		} else if (sigint_handled) {
-			// poll was interrupted by SIGINT
-			sigint_handled = false;
+		const char *line;
+		do {
+			line = soggy_rx.input("\x1b[90msoggy > \x1b[0m");
+		} while (line == NULL && errno == EAGAIN);
+		if (line != NULL) {
+			if (line[0] != '\0') {
+				soggy_rx.history_add(line);
+				execute_repl_line(std::string(line));
+			}
+		} else {
+			printf("EOF\n");
 			go = false;
-			putchar('\n');
 		}
 	}
-
-	rl_cleanup_after_signal();
 }
 
 void non_interactive_main() {
 	// non-interactive main: just wait until SIGINT is received
 
+	static std::condition_variable cond;
+	static std::mutex mutex;
 	static bool sigint_handled = false;
-	struct sigaction act;
-	act.sa_handler = [](int) { sigint_handled = true; };
-	sigaction(SIGINT, &act, NULL);
-	do {
-		poll(NULL, 0, -1); // wait for any interrupt
-	} while (!sigint_handled);
+
+	signal(SIGINT, [](int) -> void {
+		sigint_handled = true;
+		cond.notify_one();
+	});
+
+	std::unique_lock lock(mutex);
+	cond.wait(lock, []{ return sigint_handled; });
 }
 
 int main(int argc, char *argv[]) {
@@ -1588,14 +1566,16 @@ int main(int argc, char *argv[]) {
 
 	init_mainplayer(); // initialize a demo player
 
+	enet_initialize();
+
 	ENetAddress addr;
+	addr.host = ENET_HOST_ANY;
 	addr.port = 22102;
-	enet_address_set_host(&addr, "localhost");
 
 	host = enet_host_create(&addr, /*peerCount*/ 1, /*channelLimit*/ 0, /*incomingBandwidth*/ 0, /*outgoingBandwidth*/ 0);
 	if (host == NULL) {
-		perror("enet_create_host");
-		exit(1);
+		print_error("enet_create_host");
+		return 1;
 	}
 	enet_host_compress_with_range_coder(host);
 	host->checksum = enet_crc32;
@@ -1604,7 +1584,7 @@ int main(int argc, char *argv[]) {
 
 	std::thread game_server(&game_server_main);
 
-	if (isatty(STDIN_FILENO)) {
+	if (isatty(fileno(stdout))) {
 		interactive_main();
 	} else {
 		non_interactive_main();
@@ -1614,6 +1594,8 @@ int main(int argc, char *argv[]) {
 	game_server.join();
 
 	exit_handler();
+
+	printf("exit\n");
 
 	return 0;
 }

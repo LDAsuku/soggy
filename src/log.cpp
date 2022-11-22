@@ -1,30 +1,26 @@
 // log.cpp
 
-// POSIX
+// C++
 #include <cstdio>
 #include <cstdarg>
 
-// readline
-#include <readline/readline.h>
+// replxx
+#include <replxx.hxx>
 
 // soggy
 #include "log.hpp"
 
+replxx::Replxx soggy_rx;
+
 void soggy_log(const char *fmt, ...) {
-	bool use_rl = RL_ISSTATE(RL_STATE_INITIALIZED);
-	if (use_rl) {
-		rl_clear_visible_line();
-	}
-	va_list v;
-	va_start(v, fmt);
-	vprintf(fmt, v);
-	va_end(v);
+	va_list va;
+	va_start(va, fmt);
+	int size = vsnprintf(NULL, 0, fmt, va);
+	va_end(va);
+	va_start(va, fmt);
+	std::unique_ptr<char[]> buf(new char[size + 1]);
+	vsnprintf(buf.get(), size + 1, fmt, va);
+	va_end(va);
+	soggy_rx.print(buf.get());
 	putchar('\n');
-	rl_on_new_line();
-	if (use_rl) {
-		rl_on_new_line();
-		if (!rl_done) {
-			rl_redisplay();
-		}
-	}
 }

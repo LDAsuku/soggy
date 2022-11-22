@@ -6,7 +6,7 @@ import json
 import traceback
 import urllib.parse
 
-DISPATCH_LISTEN = "localhost"
+DISPATCH_LISTEN = "0.0.0.0"
 DISPATCH_PORT = 8099
 DISPATCH_ROUTE_URL = "http://localhost:8099"
 
@@ -55,13 +55,30 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 				self.send_response(200)
 				self.end_headers()
 				self.wfile.write(DESIGN_DATA_CUR_VERSION_BYTES)
-			else:
-				self.send_response(501)
+			elif url.path == "/":
+				self.send_response(200)
 				self.end_headers()
+				self.wfile.write(b"<head><style>@keyframes soggy{from{background-position:0 234px}to{background-position:375px 0}}body{background:url(\"/soggy_cat.png\") repeat;animation:soggy 2s linear 0s infinite}</style></head>\n")
+			elif url.path == "/soggy_cat.png":
+				self.send_response(200)
+				self.send_header("Content-Type", "image/png")
+				self.send_header("Content-Disposition", "inline")
+				self.end_headers()
+				with open("soggy_cat.png", "rb") as f:
+					self.wfile.write(f.read())
+			elif url.path == "/favicon.ico":
+				self.send_response(404)
+				self.wfile.write(b"404 Not Found\n")
+				self.end_headers()
+			else:
+				self.send_response(400)
+				self.end_headers()
+				self.wfile.write(b"400 Bad Request\n")
 		except Exception as ex:
 			traceback.print_exception(ex)
 			self.send_response(500)
 			self.end_headers()
+			self.wfile.write(b"500 Internal Server Error\n")
 
 	def do_HEAD(self):
 		url = urllib.parse.urlparse(self.path)
@@ -83,12 +100,14 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 				self.send_header("Content-Length", str(len(DESIGN_DATA_CUR_VERSION_BYTES)))
 				self.end_headers()
 			else:
-				self.send_response(501)
+				self.send_response(400)
+				self.wfile.write(b"400 Bad Request\n")
 				self.end_headers()
 		except Exception as ex:
 			traceback.print_exc(ex)
 			self.send_response(500)
 			self.end_headers()
+			self.wfile.write(b"500 Internal Server Error\n")
 
 	def do_POST(self):
 		self.send_response(501)
@@ -172,7 +191,7 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 httpd = None
 try:
 	socketserver.TCPServer.allow_reuse_address = True
-	httpd = socketserver.TCPServer(("localhost", DISPATCH_PORT), DispatchHandler)
+	httpd = socketserver.TCPServer((DISPATCH_LISTEN, DISPATCH_PORT), DispatchHandler)
 	print(f"dispatch listening on port {DISPATCH_PORT:d}")
 	httpd.serve_forever()
 except KeyboardInterrupt:

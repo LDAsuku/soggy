@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
 
 		cpp_includes << "#include <proto/" << cmdname << ".pb.h>\n";
 
-		cpp_init_code << "\t\tstatic const cmdids::CmdIdDetail detail_" << cmdname << " = (cmdids::CmdIdDetail){ " << cmdname << "::GetDescriptor(), \"" << cmdname << "\", " << cmdid << ", " << channel_id << ", " << reliable << ", " << allow_client << " };\n";
+		cpp_init_code << "\t\tstatic const cmdids::CmdIdDetail detail_" << cmdname << " = cmdids::CmdIdDetail{ " << cmdname << "::GetDescriptor(), \"" << cmdname << "\", " << cmdid << ", " << channel_id << ", " << reliable << ", " << allow_client << " };\n";
 
 		cpp_init_code << "\t\tcmdids::cmd_id_to_detail.insert({ (unsigned short)" << cmdid << ", &detail_" << cmdname << " });\n";
 		cpp_init_code << "\t\tcmdids::cmd_name_to_detail.insert({ \"" << cmdname << "\", &detail_" << cmdname << " });\n";

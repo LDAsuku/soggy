@@ -17,11 +17,11 @@
 #include <nlohmann/json.hpp>
 
 // lua
-/*extern "C" {
+extern "C" {
 	#include <lua.h>
 	#include <lualib.h>
 	#include <lauxlib.h>
-}*/
+}
 
 // soggy
 #include "game_enums.hpp"
