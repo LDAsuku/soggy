@@ -22,5 +22,5 @@ void soggy_log(const char *fmt, ...) {
 	vsnprintf(buf.get(), size + 1, fmt, va);
 	va_end(va);
 	soggy_rx.print(buf.get());
-	putchar('\n');
+	soggy_rx.print("\n");
 }
