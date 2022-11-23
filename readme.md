@@ -1,3 +1,5 @@
+If you're going to chase clout on twitter by posting "leaks" with this, PLEASE credit the project.
+
 # Soggy
 
 Server software implementation for a game I forgot its name 💀
@@ -44,8 +46,6 @@ cmake -B build -G "Unix Makefiles"
 # build
 cmake --build build -j8
 ```
-
-Also: Don't use WSL. According to everyone who's tried, it doesn't work.
 
 ## Running
 

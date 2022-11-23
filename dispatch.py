@@ -25,6 +25,9 @@ GUIDE_URL = "https://cdn.discordapp.com/attachments/441109559004889098/104369074
 GAME_RES_CUR_VERSION_BYTES = str(GAME_RES_CUR_VERSION).encode("utf8")
 DESIGN_DATA_CUR_VERSION_BYTES = str(DESIGN_DATA_CUR_VERSION).encode("utf8")
 
+with open("soggy_cat.png", "rb") as f:
+	soggy_cat_png = f.read()
+
 class DispatchHandler(http.server.BaseHTTPRequestHandler):
 	def version_string(self):
 		return "broken pancake"
@@ -64,8 +67,7 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 				self.send_header("Content-Type", "image/png")
 				self.send_header("Content-Disposition", "inline")
 				self.end_headers()
-				with open("soggy_cat.png", "rb") as f:
-					self.wfile.write(f.read())
+				self.wfile.write(soggy_cat_png)
 			elif url.path == "/favicon.ico":
 				self.send_response(404)
 				self.wfile.write(b"404 Not Found\n")
