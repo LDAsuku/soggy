@@ -1,3 +1,5 @@
+Language: EN | [中文](readme_cn.md)
+
 If you're going to chase clout on twitter by posting "leaks" with this, PLEASE credit the project.
 
 # Soggy
@@ -15,6 +17,8 @@ Server software implementation for a game I forgot its name 💀
 apt install build-essential cmake libprotobuf-dev protobuf-compiler liblua5.3-dev
 # install dependencies (arch linux)
 pacman -S cmake protobuf lua
+# install dependencies (opensuse)
+zypper in libprotobuf-mutator-devel libprotobuf-c-devel protobuf-devel liblua5_3-5 lua53-devel
 # setup for build
 cmake -B build
 # build
