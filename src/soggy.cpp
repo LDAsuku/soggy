@@ -1438,7 +1438,6 @@ void cmd_pos(YSConnection *target, std::string label, std::string argline) {
 
 void cmd_scene(YSConnection *target, std::string label, std::string argline){
 	PlayerEnterSceneNotify escene;
-	EnterScenePeerNotify escene_peer;
 
 	int arg_scene_id = arg_take<int>(&argline);
 
@@ -1451,8 +1450,6 @@ void cmd_scene(YSConnection *target, std::string label, std::string argline){
 
 		target->send_packet(&escene);
 		mainplayer.scene = arg_scene_id;
-		escene_peer.set_destsceneid(arg_scene_id);
-		target->send_packet(&escene_peer);
 		mainplayer.current_pos.y = 600;
 		mainplayer.current_pos.x = 0;
 		mainplayer.current_pos.z = 0;
