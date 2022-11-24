@@ -10,3 +10,5 @@
 # game data :eyes:
 /resources
 *.zip
+
+__pycahce__

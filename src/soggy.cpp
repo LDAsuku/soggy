@@ -680,13 +680,18 @@ void init_mainplayer() {
 		const exceloutput::AvatarData *excel_avatar = &it.second;
 		if (excel_avatar->use_type == AvatarUseType::AVATAR_FORMAL) {
 			mainplayer.add_avatar(excel_avatar->id);
+			mainplayer.add_avatar(10000001);
+			mainplayer.add_avatar(10000025);
+			mainplayer.add_avatar(11000026);
+			mainplayer.add_avatar(11000029);
 		}
 	}
 
 	// add some avatars to the current team
-	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(10000007)->avatar_guid); // lumine
-	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(10000003)->avatar_guid); // jean
-	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(10000006)->avatar_guid); // lisa
+	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(11000026)->avatar_guid); // lumine
+	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(10000001)->avatar_guid); // jean
+	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(10000023)->avatar_guid); // lisa
+	mainplayer.team_avatars.push_back(mainplayer.get_avatar_by_avatar_id(11000029)->avatar_guid); // lisa
 
 	mainplayer.team_current_avatar_guid = mainplayer.team_avatars.at(0);
 
@@ -1431,6 +1436,30 @@ void cmd_pos(YSConnection *target, std::string label, std::string argline) {
 	soggy_log("rot x=%.3f y=%.3f z=%.3f", target->player->current_rot.x, target->player->current_rot.y, target->player->current_rot.z);
 }
 
+void cmd_scene(YSConnection *target, std::string label, std::string argline){
+	PlayerEnterSceneNotify escene;
+
+	int arg_scene_id = arg_take<int>(&argline);
+
+	if (arg_scene_id != NULL) {
+		escene.set_sceneid(arg_scene_id);
+		escene.set_prevsceneid(mainplayer.scene);
+		escene.set_type(EnterType::ENTER_SELF);
+		
+		escene.set_targetuid(PLAYER_UID);
+
+		target->send_packet(&escene);
+		mainplayer.scene = arg_scene_id;
+		mainplayer.current_pos.y = 600;
+		mainplayer.current_pos.x = 0;
+		mainplayer.current_pos.z = 0;
+	}
+	else {
+		soggy_log("invalid scene id");
+		return;
+	}
+}
+
 // todo commands:
 
 // packetlog on -> enable packet logging
@@ -1444,7 +1473,6 @@ void cmd_pos(YSConnection *target, std::string label, std::string argline) {
 // team add ...
 // team remove ...
 
-// warp (scene)
 // warp (x) (y) (z)
 
 void run_cmd(YSConnection *target, std::string label, std::string argline = std::string()) {
@@ -1513,6 +1541,7 @@ void interactive_main() {
 	rlcmd_add_with_target("elfie", cmd_elfie);
 	rlcmd_add_with_target("se", cmd_switchelement);
 	rlcmd_add_with_target("pos", cmd_pos);
+	rlcmd_add_with_target("scene",cmd_scene);
 
 	soggy_rx.install_window_change_handler();
 
