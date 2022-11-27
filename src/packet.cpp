@@ -27,7 +27,7 @@ inline uint32_t get_uint32(uint8_t *buf) {
 	return ENET_NET_TO_HOST_32(*(uint32_t *)buf);
 }
 
-google::protobuf::Message *decode_packet(const ENetPacket *enetpacket, unsigned short *pcmdid) {
+const google::protobuf::Message *decode_packet(const ENetPacket *enetpacket, unsigned short *pcmdid) {
 	uint16_t header_magic = get_uint16(enetpacket->data + 0);
 	uint16_t cmdid = get_uint16(enetpacket->data + 2);
 	uint16_t head_length = get_uint16(enetpacket->data + 4);

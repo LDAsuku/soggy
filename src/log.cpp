@@ -21,6 +21,5 @@ void soggy_log(const char *fmt, ...) {
 	std::unique_ptr<char[]> buf(new char[size + 1]);
 	vsnprintf(buf.get(), size + 1, fmt, va);
 	va_end(va);
-	soggy_rx.print(buf.get());
-	soggy_rx.print("\n");
+	soggy_rx.print("%s\n", buf.get());
 }

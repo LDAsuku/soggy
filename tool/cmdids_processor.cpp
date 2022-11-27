@@ -79,6 +79,10 @@ int main(int argc, char *argv[]) {
 		std::getline(csvf, allow_client, '\n');
 		if (csvf.eof()) break;
 
+		if (cmdname == "DebugNotify") {
+			continue;
+		}
+
 		hpp_defines << "#define CMD_ID_" << cmdname << " " << cmdid << "\n";
 
 		cpp_includes << "#include <proto/" << cmdname << ".pb.h>\n";

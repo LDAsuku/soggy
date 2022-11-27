@@ -7,6 +7,7 @@
 #include <csignal>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,6 +15,7 @@
 #include <thread>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #ifdef _WIN32
 #include <io.h>
 #endif
@@ -106,6 +108,11 @@
 #include "proto/PlatformInfo.pb.h"
 #include "proto/EvtSetAttackTargetNotify.pb.h"
 #include "proto/ClientScriptEventNotify.pb.h"
+#include "proto/ChangeGameTimeReq.pb.h"
+#include "proto/ChangeGameTimeRsp.pb.h"
+#include "proto/SceneTimeNotify.pb.h"
+#include "proto/PersonalSceneJumpReq.pb.h"
+#include "proto/PersonalSceneJumpRsp.pb.h"
 #include "proto/cmdids.hpp"
 
 // soggy
@@ -189,20 +196,19 @@ struct YSEntity {
 	} gadget;
 	Vec3f pos;
 	Vec3f rot;
-	bool dead = false;
 };
 
 struct YSAvatar {
 	// runtime state
 	YSPlayer *owning_player = NULL;
+	int avatar_entity_id = 0;
+	int weapon_entity_id = 0;
 
 	// persist data
 	int avatar_id = 0;
 	int avatar_guid = 0;
-	int avatar_entity_id = 0;
 	int skill_depot_id = 0;
 	int weapon_guid = 0;
-	int weapon_entity_id = 0;
 	int reliquary_bracer_guid = 0;
 	int reliquary_dress_guid = 0;
 	int reliquary_shoes_guid = 0;
@@ -228,14 +234,15 @@ struct YSAvatar {
 struct YSPlayer {
 	// runtime state
 	YSConnection *conn;
+	bool current_scene_is_done = false; // set to false when switching scenes or when initially loading, set to true after receiving EnterSceneDoneReq
 	bool has_sent_avatardatanotify = false;
-	int scene = 0;
+	int current_sceneid = 0;
 	Vec3f current_pos;
 	Vec3f current_rot;
 	std::unordered_map<int, YSEntity> scene_entities;
+	int team_entity_id = 0;
 
 	// persist data
-	int team_entity_id = 0;
 	std::unordered_map<int, YSAvatar> avatars;
 	std::unordered_map<int, int> equips_ref; // redundant; item guid -> avatar guid
 	std::unordered_map<int, int> avatars_by_id_ref; // redundant; avatar id -> avatar guid
@@ -251,6 +258,9 @@ struct YSPlayer {
 	YSAvatar *add_avatar(int avatar_id);
 	YSPlayerItem *add_item(int item_id);
 	int scene_add_entity(RuntimeIDCategory cat, YSEntity *entity);
+	void switch_avatar(int guid);
+	void make_player_enter_scene_notify_proto(PlayerEnterSceneNotify *playerenterscenenotify, EnterType entertype, int prev_sceneid);
+	void enter_scene(int sceneid, Vec3f pos, Vec3f rot);
 };
 
 struct YSConnection {
@@ -337,8 +347,8 @@ void YSPlayer::fill_player_props(google::protobuf::Map<uint32_t, PropValue> *pro
 	// future: unhardcode this
 	pb_add_prop_pair(prop_map, PropType::PROP_LAST_CHANGE_AVATAR_TIME, 0);
 	pb_add_prop_pair(prop_map, PropType::PROP_IS_FLYABLE, 1);
-	pb_add_prop_pair(prop_map, PropType::PROP_IS_WEATHER_LOCKED, 1);
-	pb_add_prop_pair(prop_map, PropType::PROP_IS_GAME_TIME_LOCKED, 1);
+	pb_add_prop_pair(prop_map, PropType::PROP_IS_WEATHER_LOCKED, 0);
+	pb_add_prop_pair(prop_map, PropType::PROP_IS_GAME_TIME_LOCKED, 0);
 	pb_add_prop_pair(prop_map, PropType::PROP_IS_TRANSFERABLE, 1);
 	pb_add_prop_pair(prop_map, PropType::PROP_MAX_STAMINA, 15000); // actual stamina maximum needs to be confirmed
 	pb_add_prop_pair(prop_map, PropType::PROP_CUR_PERSIST_STAMINA, 15000);
@@ -349,6 +359,39 @@ void YSPlayer::fill_player_props(google::protobuf::Map<uint32_t, PropValue> *pro
 	pb_add_prop_pair(prop_map, PropType::PROP_PLAYER_SCOIN, 1); // mora
 	pb_add_prop_pair(prop_map, PropType::PROP_IS_WORLD_ENTERABLE, 1);
 	pb_add_prop_pair(prop_map, PropType::PROP_IS_MP_MODE_AVAILABLE, 1);
+}
+
+void YSPlayer::make_player_enter_scene_notify_proto(PlayerEnterSceneNotify *playerenterscenenotify, EnterType entertype, int prev_sceneid) {
+	playerenterscenenotify->set_sceneid(this->current_sceneid);
+	if (this->current_sceneid != prev_sceneid) {
+		playerenterscenenotify->set_prevsceneid(prev_sceneid);
+		playerenterscenenotify->mutable_prevpos();
+	}
+	pb_make_vector(playerenterscenenotify->mutable_pos(), &this->current_pos);
+	playerenterscenenotify->set_scenebegintime(0);
+	playerenterscenenotify->set_type(entertype);
+	playerenterscenenotify->set_targetuid(PLAYER_UID);
+}
+
+void YSPlayer::enter_scene(int sceneid, Vec3f pos, Vec3f rot) {
+	int prev_sceneid = this->current_sceneid;
+	this->current_sceneid = sceneid;
+	this->current_pos = pos;
+	this->current_rot = rot;
+
+	EnterType entertype;
+	if (this->current_sceneid != prev_sceneid) {
+		// entering a different scene
+		entertype = EnterType::ENTER_JUMP;
+		this->current_scene_is_done = false; // suspend until the client finishes loading the new scene
+	} else {
+		// same scene
+		entertype = EnterType::ENTER_GOTO;
+	}
+
+	PlayerEnterSceneNotify playerenterscenenotify;
+	this->make_player_enter_scene_notify_proto(&playerenterscenenotify, entertype, prev_sceneid);
+	conn->send_packet(&playerenterscenenotify);
 }
 
 //
@@ -509,6 +552,7 @@ int YSAvatar::get_equip_guid_by_slot(EquipType equip_type) {
 		default: return 0;
 	}
 }
+
 void YSAvatar::set_equip_guid_by_slot(EquipType equip_type, int guid) {
 	int prev_guid = this->get_equip_guid_by_slot(equip_type);
 	if (prev_guid != 0) {
@@ -564,13 +608,13 @@ const exceloutput::AvatarData *YSAvatar::get_excel() const {
 }
 
 void YSAvatar::recalc_talent_ids() {
+	this->talent_ids.clear();
 	const exceloutput::AvatarSkillDepotData *excel_avatar_skill_depot;
 	try {
 		excel_avatar_skill_depot = &exceloutput::avatar_skill_depot_datas.at(this->skill_depot_id);
 	} catch (const std::out_of_range &) {
 		return;
 	}
-	this->talent_ids.clear();
 	for (int talent_group : excel_avatar_skill_depot->talent_groups) {
 		for (const auto &e : exceloutput::talent_skill_datas) {
 			const exceloutput::TalentSkillData *talent_skill = &e.second;
@@ -581,7 +625,26 @@ void YSAvatar::recalc_talent_ids() {
 	}
 }
 
-void ysplayer_flush(YSConnection *conn) {
+void YSPlayer::switch_avatar(int guid) {
+	const YSAvatar *prev_avatar = this->get_current_avatar();
+	this->team_current_avatar_guid = guid;
+	const YSAvatar *new_avatar = this->get_current_avatar();
+
+	// disappear the previously on-field avatar
+	SceneEntityDisappearNotify disappear;
+	disappear.add_entitylist(prev_avatar->avatar_entity_id);
+	disappear.set_disappeartype(VisionType::VISION_REPLACE);
+	this->conn->send_packet(&disappear);
+
+	// appear a new one
+	SceneEntityAppearNotify appear;
+	new_avatar->make_entity_info_proto(appear.add_entitylist());
+	appear.set_param(prev_avatar->avatar_entity_id); // old entity id
+	appear.set_appeartype(VisionType::VISION_REPLACE);
+	this->conn->send_packet(&appear);
+}
+
+/*void ysplayer_flush(YSConnection *conn) {
 	// flush entities
 
 	SceneEntityAppearNotify appear;
@@ -614,7 +677,7 @@ void ysplayer_flush(YSConnection *conn) {
 		appear.set_appeartype(VisionType::VISION_MEET);
 		conn->send_packet(&appear);
 	}
-}
+}*/
 
 
 
@@ -704,13 +767,13 @@ void init_mainplayer() {
 		}
 	}
 
-	// in front of the goddess statue at stormterror
-	mainplayer.scene = 3;
-	mainplayer.current_pos.x = 2644.623f;
-	mainplayer.current_pos.y = 262.707f;
-	mainplayer.current_pos.z = 176.668f;
+	// in front of the cathedral
+	mainplayer.current_sceneid = 3;
+	mainplayer.current_pos.x = 2352.869f;
+	mainplayer.current_pos.y = 259.998f;
+	mainplayer.current_pos.z = -691.396f;
 	mainplayer.current_rot.x = 0.0f;
-	mainplayer.current_rot.y = 257.280f;
+	mainplayer.current_rot.y = 23.880f;
 	mainplayer.current_rot.z = 0.0f;
 }
 
@@ -825,11 +888,7 @@ void handle_PlayerLoginReq(YSConnection *conn, const PlayerLoginReq *playerlogin
 	conn->player->has_sent_avatardatanotify = true;
 
 	PlayerEnterSceneNotify playerenterscenenotify;
-	playerenterscenenotify.set_sceneid(conn->player->scene);
-	pb_make_vector(playerenterscenenotify.mutable_pos(), &conn->player->current_pos);
-	playerenterscenenotify.set_scenebegintime(0);
-	playerenterscenenotify.set_type(EnterType::ENTER_SELF);
-	playerenterscenenotify.set_targetuid(PLAYER_UID);
+	conn->player->make_player_enter_scene_notify_proto(&playerenterscenenotify, EnterType::ENTER_SELF, 0);
 	conn->send_packet(&playerenterscenenotify);
 
 	PlayerLoginRsp playerloginrsp;
@@ -852,7 +911,7 @@ void handle_PingReq(YSConnection *conn, const PingReq *pingreq) {
 
 void handle_EnterSceneReadyReq(YSConnection *conn, const EnterSceneReadyReq *enterscenereadyreq) {
 	EnterScenePeerNotify enterscenepeernotify;
-	enterscenepeernotify.set_destsceneid(conn->player->scene);
+	enterscenepeernotify.set_destsceneid(conn->player->current_sceneid);
 	enterscenepeernotify.set_peerid(PLAYER_PEER_ID);
 	enterscenepeernotify.set_hostpeerid(PLAYER_PEER_ID);
 	conn->send_packet(&enterscenepeernotify);
@@ -923,8 +982,6 @@ void handle_SceneInitFinishReq(YSConnection *conn, const SceneInitFinishReq *sce
 	conn->send_packet(&playerentersceneinfonotify);
 
 	SceneForceUnlockNotify sceneforceunlocknotify;
-	sceneforceunlocknotify.add_forceidlist(3);
-	sceneforceunlocknotify.set_isadd(true);
 	conn->send_packet(&sceneforceunlocknotify);
 
 	HostPlayerNotify hostplayernotify;
@@ -954,6 +1011,8 @@ void handle_EnterSceneDoneReq(YSConnection *conn, const EnterSceneDoneReq *enter
 	pb_make_vector(playerlocationinfo->mutable_rot(), &conn->player->current_rot);
 	conn->send_packet(&sceneplayerlocationnotify);
 
+	conn->player->current_scene_is_done = true;
+
 	EnterSceneDoneRsp enterscenedonersp;
 	enterscenedonersp.set_retcode(Retcode::RET_SUCC);
 	conn->send_packet(&enterscenedonersp);
@@ -967,27 +1026,29 @@ void handle_PlayerSetPauseReq(YSConnection *conn, const PlayerSetPauseReq *playe
 
 void handle_SceneEntityMoveReq(YSConnection *conn, const SceneEntityMoveReq *sceneentitymovereq) {
 	int avatar_entity_id = conn->player->get_current_avatar()->avatar_entity_id;
-	if (sceneentitymovereq->entityid() == avatar_entity_id) {
-		conn->player->current_pos = pb_convert_vector(&sceneentitymovereq->motioninfo().pos());
-		conn->player->current_rot = pb_convert_vector(&sceneentitymovereq->motioninfo().rot());
+	// this check is to prevent SceneEntityMoveReq packets from being recorded and clobbering positions after teleport packets are sent
+	// in the future this would use the received entityId to determine whether to record movement
+	// all scene entities would be despawned as soon as a transpoint is used, so the entity id in this packet would be invalid
+	// for now, just ignore it if the scene isn't done loading
+	if (conn->player->current_scene_is_done) {
+		if (sceneentitymovereq->entityid() == avatar_entity_id) {
+			conn->player->current_pos = pb_convert_vector(&sceneentitymovereq->motioninfo().pos());
+			conn->player->current_rot = pb_convert_vector(&sceneentitymovereq->motioninfo().rot());
+		}
 	}
 }
 
 void handle_SceneTransToPointReq(YSConnection *conn, const SceneTransToPointReq *scenetranstopointreq) {
-	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(scenetranstopointreq->sceneid());
-	const binoutput::ConfigScenePoint *point = &scene->points.at(scenetranstopointreq->pointid());
+	const binoutput::ConfigScenePoint *point;
+	try {
+		const binoutput::ConfigScene *scene = &binoutput::scene_points.at(scenetranstopointreq->sceneid());
+		point = &scene->points.at(scenetranstopointreq->pointid());
+	} catch (std::out_of_range &) {
+		conn->send_empty_rsp_with_retcode<SceneTransToPointRsp>(Retcode::RET_ENTER_SCENE_FAIL);
+		return;
+	}
 
-	conn->player->scene = scenetranstopointreq->sceneid();
-	conn->player->current_pos = point->tranpos;
-	conn->player->current_rot = point->tranrot;
-
-	PlayerEnterSceneNotify playerenterscenenotify;
-	playerenterscenenotify.set_sceneid(scenetranstopointreq->sceneid());
-	pb_make_vector(playerenterscenenotify.mutable_pos(), &conn->player->current_pos);
-	playerenterscenenotify.set_scenebegintime(0);
-	playerenterscenenotify.set_type(EnterType::ENTER_GOTO);
-	playerenterscenenotify.set_targetuid(PLAYER_UID);
-	conn->send_packet(&playerenterscenenotify);
+	conn->player->enter_scene(scenetranstopointreq->sceneid(), point->tranpos, point->tranrot);
 
 	SceneTransToPointRsp scenetranstopointrsp;
 	scenetranstopointrsp.set_retcode(Retcode::RET_SUCC);
@@ -996,32 +1057,35 @@ void handle_SceneTransToPointReq(YSConnection *conn, const SceneTransToPointReq 
 	conn->send_packet(&scenetranstopointrsp);
 }
 
-void handle_ChangeAvatarReq(YSConnection *conn, const ChangeAvatarReq *changeavatarreq) {
-	YSAvatar *prev_avatar = conn->player->get_current_avatar();
+void handle_PersonalSceneJumpReq(YSConnection *conn, const PersonalSceneJumpReq *personalscenejumpreq) {
+	const binoutput::ConfigScenePoint *point;
+	try {
+		const binoutput::ConfigScene *scene = &binoutput::scene_points.at(conn->player->current_sceneid);
+		point = &scene->points.at(personalscenejumpreq->pointid());
+	} catch (std::out_of_range &) {
+		conn->send_empty_rsp_with_retcode<PersonalSceneJumpRsp>(Retcode::RET_ENTER_SCENE_FAIL);
+		return;
+	}
 
+	conn->player->enter_scene(point->transceneid, point->tranpos, point->tranrot);
+
+    PersonalSceneJumpRsp personalscenejumprsp;
+    personalscenejumprsp.set_destsceneid(point->transceneid);
+    pb_make_vector(personalscenejumprsp.mutable_destpos(), &point->tranpos);
+    conn->send_packet(&personalscenejumprsp);
+}
+
+void handle_ChangeAvatarReq(YSConnection *conn, const ChangeAvatarReq *changeavatarreq) {
 	if (std::find(conn->player->team_avatars.cbegin(), conn->player->team_avatars.cend(), changeavatarreq->guid()) == conn->player->team_avatars.cend()) {
 		conn->send_empty_rsp_with_retcode<ChangeAvatarRsp>(Retcode::RET_AVATAR_NOT_EXIST_IN_TEAM);
 		return;
 	}
 
-	conn->player->team_current_avatar_guid = changeavatarreq->guid();
-	YSAvatar *new_avatar = conn->player->get_current_avatar();
-
-	SceneEntityDisappearNotify disappearnotify;
-	disappearnotify.add_entitylist(prev_avatar->avatar_entity_id);
-	disappearnotify.set_disappeartype(VisionType::VISION_REPLACE);
-	conn->send_packet(&disappearnotify);
-
-	SceneEntityAppearNotify appearnotify;
-	new_avatar->make_entity_info_proto(appearnotify.add_entitylist());
-
-	appearnotify.set_param(prev_avatar->avatar_entity_id); // old entity id
-	appearnotify.set_appeartype(VisionType::VISION_REPLACE);
-	conn->send_packet(&appearnotify);
+	conn->player->switch_avatar(changeavatarreq->guid());
 
 	ChangeAvatarRsp changeavatarrsp;
 	changeavatarrsp.set_retcode(Retcode::RET_SUCC);
-	changeavatarrsp.set_curguid(new_avatar->avatar_guid);
+	changeavatarrsp.set_curguid(changeavatarreq->guid());
 	conn->send_packet(&changeavatarrsp);
 }
 
@@ -1174,25 +1238,8 @@ void handle_SetUpAvatarTeamReq(YSConnection *conn, const SetUpAvatarTeamReq *set
 	int prev_field_avatar_guid = conn->player->team_current_avatar_guid;
 
 	if (std::find(conn->player->team_avatars.cbegin(), conn->player->team_avatars.cend(), prev_field_avatar_guid) == conn->player->team_avatars.cend()) {
-		// previously on-field avatar was removed
-		const YSAvatar *prev_avatar = conn->player->get_current_avatar();
-
-		// spawn the avatar at index 0
-		conn->player->team_current_avatar_guid = conn->player->team_avatars.at(0);
-		const YSAvatar *new_avatar = conn->player->get_current_avatar();
-
-		// disappear the previously on-field avatar
-		SceneEntityDisappearNotify disappear;
-		disappear.add_entitylist(prev_avatar->avatar_entity_id);
-		disappear.set_disappeartype(VisionType::VISION_REPLACE);
-		conn->send_packet(&disappear);
-
-		// reappear a new one
-		SceneEntityAppearNotify appear;
-		new_avatar->make_entity_info_proto(appear.add_entitylist());
-		appear.set_param(prev_avatar->avatar_entity_id); // old entity id
-		appear.set_appeartype(VisionType::VISION_REPLACE);
-		conn->send_packet(&appear);
+		// switch to avatar at index 0
+		conn->player->switch_avatar(conn->player->team_avatars.at(0));
 	}
 
 	SetUpAvatarTeamRsp setupavatarteamrsp;
@@ -1213,6 +1260,19 @@ void handle_SceneGetAreaExplorePercentReq(YSConnection *conn, const SceneGetArea
 
 void handle_BuyGoodsReq(YSConnection *conn, const BuyGoodsReq *buygoodsreq) {
 	conn->send_empty_rsp_with_retcode<BuyGoodsRsp>(Retcode::RET_GOODS_NOT_EXIST);
+}
+
+void handle_ChangeGameTimeReq(YSConnection *conn, const ChangeGameTimeReq *changehametimereq) {
+	SceneTimeNotify scenetimenotify;
+	scenetimenotify.set_sceneid(conn->player->current_sceneid);
+	scenetimenotify.set_scenetime(changehametimereq->gametime());
+	scenetimenotify.set_ispaused(false);
+	conn->send_packet(&scenetimenotify);
+
+	ChangeGameTimeRsp changegametimersp;
+	changegametimersp.set_curgametime(changehametimereq->gametime());
+	changegametimersp.set_retcode(Retcode::RET_SUCC);
+	conn->send_packet(&changegametimersp);
 }
 
 
@@ -1272,7 +1332,7 @@ void game_server_main() {
 			}
 			case ENET_EVENT_TYPE_RECEIVE: {
 				unsigned short cmdid;
-				google::protobuf::Message *body = decode_packet(ev.packet, &cmdid);
+				const google::protobuf::Message *body = decode_packet(ev.packet, &cmdid);
 				if (body == NULL) {
 					break;
 				}
@@ -1306,6 +1366,8 @@ void game_server_main() {
 					HANDLE(SceneGetAreaExplorePercentReq)
 					HANDLE(BuyGoodsReq)
 					HANDLE(ClientScriptEventNotify)
+					HANDLE(ChangeGameTimeReq)
+					HANDLE(PersonalSceneJumpReq)
 				}
 #undef HANDLE
 
@@ -1318,8 +1380,8 @@ void game_server_main() {
 	}
 }
 
-typedef void (*soggy_rlcmd_proc_with_target)(YSConnection *, std::string, std::string);
-typedef void (*soggy_rlcmd_proc_no_target)(std::string, std::string);
+typedef void (*soggy_rlcmd_proc_with_target)(YSConnection *target, std::string label, std::vector<std::string> args);
+typedef void (*soggy_rlcmd_proc_no_target)(std::string label, std::vector<std::string> args);
 
 struct RlCmdProcDesc {
 	bool need_target;
@@ -1330,34 +1392,127 @@ struct RlCmdProcDesc {
 };
 std::unordered_map<std::string, RlCmdProcDesc> rlcmd_map;
 
-template <typename T> T arg_parse0(std::string arg);
-template <> std::string arg_parse0(std::string arg) { return arg; }
-template <> int arg_parse0(std::string arg) { return std::stoi(arg); }
-template <> float arg_parse0(std::string arg) { return std::stof(arg); }
-
-template <typename T>
-T arg_take(std::string *s) {
-	if (s->empty()) {
-		return T();
+std::vector<std::string> string_split(std::string str, char sep = ' ') {
+	std::vector<std::string> parts;
+	std::istringstream iss(str);
+	std::string token;
+	while (std::getline(iss, token, sep)) {
+		parts.emplace_back(token);
 	}
-	size_t space_idx = s->find(' ');
-	if (space_idx == std::string::npos) {
-		std::string arg = *s;
-		s->assign("");
-		return arg_parse0<T>(arg);
-	}
-	size_t next_word_begin_idx = s->find_first_not_of(" ", space_idx);
-	if (next_word_begin_idx == std::string::npos) {
-		std::string arg = s->substr(0, space_idx);
-		s->assign("");
-		return arg_parse0<T>(arg);
-	}
-	std::string arg = s->substr(0, space_idx);
-	s->assign(s->substr(next_word_begin_idx));
-	return arg_parse0<T>(arg);
+	return parts;
 }
 
-void cmd_help(std::string label, std::string argline) {
+template <typename U>
+struct NumRel {
+	U value;
+	bool relative;
+	inline U resolve(U base) {
+		if (this->relative) {
+			return base + this->value;
+		} else {
+			return this->value;
+		}
+	}
+};
+
+template <typename T>
+struct Parse {
+	static void parse_one(std::string arg, T *out);
+};
+template <> void Parse<int>::parse_one(std::string arg, int *out) { *out = std::stoi(arg); }
+template <> void Parse<float>::parse_one(std::string arg, float *out) { *out = std::stof(arg); }
+template <> void Parse<std::string>::parse_one(std::string arg, std::string *out) { *out = arg; }
+
+template <typename U>
+struct Parse<std::optional<U>> {
+	static void parse_one(std::string arg, std::optional<U> *out) {
+		if (!arg.empty()) {
+			U value;
+			Parse<U>::parse_one(arg, &value);
+			*out = std::optional<U>(value);
+		}
+	}
+};
+
+template <typename U>
+struct Parse<NumRel<U>> {
+	static void parse_one(std::string arg, NumRel<U> *out) {
+		out->relative = (arg[0] == '~');
+		if (out->relative) {
+			if (arg.size() == 1) {
+				out->value = U();
+			} else {
+				Parse<U>::parse_one(arg.substr(1), &out->value);
+			}
+		} else {
+			Parse<U>::parse_one(arg, &out->value);
+		}
+	}
+};
+
+template <typename... Args>
+void parse_args(std::vector<std::string> args_in, Args *...args_out) {
+	while (args_in.size() < sizeof...(args_out)) {
+		args_in.emplace_back();
+	}
+	int i = 0;
+	([&]{
+		Parse<Args>::parse_one(args_in[i++], args_out);
+	}(), ...);
+}
+
+void cmd_warp(YSConnection *target, std::string label, std::vector<std::string> args) {
+	if (args.size() < 3) {
+		soggy_log("usage: %s <x> <y> <z> [<sceneid>]", label.c_str());
+		return;
+	}
+	NumRel<float> x;
+	NumRel<float> y;
+	NumRel<float> z;
+	std::optional<int> sceneid_opt;
+
+	try {
+		parse_args(args, &x, &y, &z, &sceneid_opt);
+	} catch (std::exception &) {
+		soggy_log("%s: failed to parse arguments", label.c_str());
+		return;
+	}
+
+	int sceneid;
+	if (sceneid_opt.has_value()) {
+		sceneid = sceneid_opt.value();
+	} else {
+		sceneid = target->player->current_sceneid;
+	}
+
+	Vec3f pos;
+	pos.x = x.resolve(target->player->current_pos.x);
+	pos.y = y.resolve(target->player->current_pos.y);
+	pos.z = z.resolve(target->player->current_pos.z);
+	target->player->enter_scene(sceneid, pos, Vec3f());
+}
+
+// warp to spawn of scene
+void cmd_scene(YSConnection *target, std::string label, std::vector<std::string> args) {
+	if (args.size() < 1) {
+		soggy_log("usage: %s <sceneid>", label.c_str());
+		return;
+	}
+
+	int sceneid;
+
+	try {
+		parse_args(args, &sceneid);
+	} catch (std::exception &) {
+		soggy_log("%s: failed to parse arguments", label.c_str());
+		return;
+	}
+
+	// todo: use the actual spawn point
+	target->player->enter_scene(sceneid, Vec3f(0.0f, 300.0f, 0.0f), Vec3f());
+}
+
+void cmd_help(std::string label, std::vector<std::string> args) {
 	soggy_log("commands available:");
 	for (const auto &it : rlcmd_map) {
 		const char *cmdname = it.first.c_str();
@@ -1365,11 +1520,11 @@ void cmd_help(std::string label, std::string argline) {
 	}
 }
 
-void cmd_stop(std::string label, std::string argline) {
+void cmd_stop(std::string label, std::vector<std::string> args) {
 	go = false;
 }
 
-void cmd_elfie(YSConnection *target, std::string label, std::string argline) {
+void cmd_elfie(YSConnection *target, std::string label, std::vector<std::string> args) {
 	SceneEntityAppearNotify appear;
 	appear.set_appeartype(VisionType::VISION_MEET);
 
@@ -1389,7 +1544,12 @@ void cmd_elfie(YSConnection *target, std::string label, std::string argline) {
 	soggy_log("elfie :)");
 }
 
-void cmd_switchelement(YSConnection *target, std::string label, std::string argline) {
+void cmd_switchelement(YSConnection *target, std::string label, std::vector<std::string> args) {
+	if (args.size() < 1) {
+		soggy_log("usage: se <element>");
+		return;
+	}
+
 	YSAvatar *avatar = target->player->get_current_avatar();
 
 	int depot_base;
@@ -1397,19 +1557,19 @@ void cmd_switchelement(YSConnection *target, std::string label, std::string argl
 		case 10000005: depot_base = 500; break;
 		case 10000007: depot_base = 700; break;
 		default:
-			soggy_log("active avatar must be lumine or aether");
+			soggy_log("se: active avatar must be lumine or aether");
 			return;
 	}
 
-	std::string element_name = arg_take<std::string>(&argline);
+	std::string *element_name = &args[0];
 
 	int depot_offset;
-	if (!element_name.compare("anemo")) {
+	if (!element_name->compare("anemo")) {
 		depot_offset = 4;
-	} else if (!element_name.compare("geo")) {
+	} else if (!element_name->compare("geo")) {
 		depot_offset = 6;
 	} else {
-		soggy_log("invalid element \"%s\"", element_name.c_str());
+		soggy_log("se: invalid element \"%s\"", element_name->c_str());
 		return;
 	}
 
@@ -1426,7 +1586,12 @@ void cmd_switchelement(YSConnection *target, std::string label, std::string argl
 	target->send_packet(&avatarskilldepotchangenotify);
 }
 
-void cmd_pos(YSConnection *target, std::string label, std::string argline) {
+void cmd_pos(YSConnection *target, std::string label, std::vector<std::string> args) {
+	if (!target->player->current_scene_is_done) {
+		soggy_log("sceneid=%d (not done)", target->player->current_sceneid);
+	} else {
+		soggy_log("sceneid=%d", target->player->current_sceneid);
+	}
 	soggy_log("pos x=%.3f y=%.3f z=%.3f", target->player->current_pos.x, target->player->current_pos.y, target->player->current_pos.z);
 	soggy_log("rot x=%.3f y=%.3f z=%.3f", target->player->current_rot.x, target->player->current_rot.y, target->player->current_rot.z);
 }
@@ -1444,10 +1609,7 @@ void cmd_pos(YSConnection *target, std::string label, std::string argline) {
 // team add ...
 // team remove ...
 
-// warp (scene)
-// warp (x) (y) (z)
-
-void run_cmd(YSConnection *target, std::string label, std::string argline = std::string()) {
+void run_cmd(YSConnection *target, std::string label, std::string args_line = std::string()) {
 	auto it = rlcmd_map.find(label);
 	if (it != rlcmd_map.end()) {
 		RlCmdProcDesc *rlcmd = &it->second;
@@ -1455,10 +1617,10 @@ void run_cmd(YSConnection *target, std::string label, std::string argline = std:
 			if (target == NULL) {
 				soggy_log("command \"%s\" requires a target", label.c_str());
 			} else {
-				rlcmd->proc_with_target(target, label, argline);
+				rlcmd->proc_with_target(target, label, string_split(args_line));
 			}
 		} else {
-			rlcmd->proc_no_target(label, argline);
+			rlcmd->proc_no_target(label, string_split(args_line));
 		}
 	} else {
 		soggy_log("no such command \"%s\"", label.c_str());
@@ -1513,6 +1675,8 @@ void interactive_main() {
 	rlcmd_add_with_target("elfie", cmd_elfie);
 	rlcmd_add_with_target("se", cmd_switchelement);
 	rlcmd_add_with_target("pos", cmd_pos);
+	rlcmd_add_with_target("warp", cmd_warp);
+	rlcmd_add_with_target("scene", cmd_scene);
 
 	soggy_rx.install_window_change_handler();
 

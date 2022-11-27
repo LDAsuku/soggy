@@ -50,3 +50,16 @@ cmake --build build -j8
 ## Running
 
 Put the `resources` directory in the current working directory and run. Enter `help` in the interactive prompt to see a list of commands.
+
+## Client patches
+
+```
+# linux patch (I have no idea what this even does, but it works)
+(VA=0x1820828f2, fileoffset=0x2081cf2) = 90 90 90 90 90
+# sprint nocd
+(VA=0x1802d1ef0, fileoffset=0x2d12f0) = b0 01 c3
+# skill nocd
+(VA=0x181ac998c, fileoffset=0x1ac8d8c) = 66 0f ef ff
+# skip update checks for slightly faster load time
+(VA=0x18213221b, fileoffset=0x213161b) = 90 90 90 90 90 90
+```

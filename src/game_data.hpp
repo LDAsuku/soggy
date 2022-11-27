@@ -109,14 +109,11 @@ struct ConfigScenePoint {
 	std::string type = "";
 	Vec3f tranpos;
 	Vec3f tranrot;
-};
-
-struct ConfigSceneArea {
+	int transceneid = 0; // only used by PersonalSceneJumpPoint
 };
 
 struct ConfigScene {
 	std::unordered_map<int, ConfigScenePoint> points;
-	std::unordered_map<int, ConfigSceneArea> areas;
 };
 
 extern std::unordered_map<int, ConfigScene> scene_points;
