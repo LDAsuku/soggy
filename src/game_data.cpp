@@ -54,7 +54,6 @@ namespace binoutput {
 
 	void from_json(const nlohmann::json &json, ConfigScene &);
 	void from_json(const nlohmann::json &json, ConfigScenePoint &);
-	void from_json(const nlohmann::json &json, ConfigSceneArea &);
 }
 
 namespace luares {
@@ -213,6 +212,7 @@ void from_json(const nlohmann::json &json, Vec3f &vec) {
 }
 void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoint &configscenepoint) {
 	json.at("$type").get_to(configscenepoint.type);
+
 	nlohmann::json::const_iterator json_tranpos = json.find("tranPos");
 	if (json_tranpos != json.end() && json_tranpos->is_object()) {
 		json_tranpos->get_to(configscenepoint.tranpos);
@@ -221,21 +221,16 @@ void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoin
 	if (json_tranrot != json.end() && json_tranrot->is_object()) {
 		json_tranrot->get_to(configscenepoint.tranrot);
 	}
-}
-void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigSceneArea &configscenearea) {
-	//
+	nlohmann::json::const_iterator json_transceneid = json.find("tranSceneId");
+	if (json_transceneid != json.end() && json_transceneid->is_number_integer()) {
+		json_transceneid->get_to(configscenepoint.transceneid);
+	}
 }
 void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScene &configscene) {
 	nlohmann::json::const_iterator json_points = json.find("points");
 	if (json_points != json.end() && json_points->is_object()) {
 		for (nlohmann::json::const_iterator it = json_points->cbegin(); it != json_points->cend(); it++) {
 			configscene.points.emplace(std::stoi(it.key()), it.value());
-		}
-	}
-	nlohmann::json::const_iterator json_areas = json.find("areas"); // "pboints"
-	if (json_areas != json.end() && json_areas->empty()) {
-		for (nlohmann::json::const_iterator it = json_areas->cbegin(); it != json_areas->cend(); it++) {
-			configscene.areas.emplace(std::stoi(it.key()), it.value());
 		}
 	}
 }

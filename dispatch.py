@@ -149,7 +149,7 @@ class DispatchHandler(http.server.BaseHTTPRequestHandler):
 		"data": {
 			"uid": str(PLAYER_UID),
 			"token": "token1",
-			"email": "soggy:)",
+			"email": "soggy:)"
 		}
 	}
 
