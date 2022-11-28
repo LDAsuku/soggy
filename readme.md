@@ -50,3 +50,8 @@ cmake --build build -j8
 ## Running
 
 Put the `resources` directory in the current working directory and run. Enter `help` in the interactive prompt to see a list of commands.
+
+## Resources
+
+- [Codeberg](https://codeberg.org/LDA_suku/soggy_resources)
+- [Github](https://github.com/360NENZ/soggy_resources)
