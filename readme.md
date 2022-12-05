@@ -2,7 +2,7 @@ If you're going to chase clout on twitter by posting "leaks" with this, PLEASE c
 
 # Soggy
 
-Server software implementation for a game I forgot its name 💀
+Experimental server emulator for a game I forgot its name 💀
 
 ![soggy cat](soggy_cat.png "soggy cat")
 

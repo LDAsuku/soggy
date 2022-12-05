@@ -1,6 +1,6 @@
 // game_data.cpp
 
-// loads stuff from exceloutput/ and binoutput/
+// loads stuff from exceloutput, binoutput, and lua
 
 #include "game_data.hpp"
 
@@ -43,6 +43,7 @@ namespace exceloutput {
 	std::unordered_map<int, GadgetData> gadget_datas;
 	std::unordered_map<int, MonsterData> monster_datas;
 	std::unordered_map<int, NpcData> npc_datas;
+	std::unordered_map<int, SceneData> scene_datas;
 
 	std::unordered_map<std::string, std::string> text_map;
 }
@@ -74,9 +75,9 @@ public:
 	Excel(std::istream *is, char sep = '\t');
 	void next();
 	bool eof();
-	std::string get_str(const std::string key);
-	int get_int(const std::string key, int def = 0);
-	std::vector<int> get_ints(const std::string key);
+	std::string get_str(const std::string key) const;
+	int get_int(const std::string key, int def = 0) const;
+	std::vector<int> get_ints(const std::string key) const;
 };
 
 Excel::Excel(std::istream *is, char sep) {
@@ -106,21 +107,21 @@ bool Excel::eof() {
 	return this->is->eof();
 }
 
-std::string Excel::get_str(const std::string key) {
+std::string Excel::get_str(const std::string key) const {
 	return this->fields.at(key);
 }
-int Excel::get_int(const std::string key, int def) {
+int Excel::get_int(const std::string key, int def) const {
 	auto it = this->fields.find(key);
 	if (it == this->fields.cend()) {
 		return def;
 	}
-	std::string *val = &it->second;
+	const std::string *val = &it->second;
 	if (val->empty()) {
 		return def;
 	}
 	return std::stoi(it->second);
 }
-std::vector<int> Excel::get_ints(const std::string key) {
+std::vector<int> Excel::get_ints(const std::string key) const {
 	std::vector<int> ints;
 	std::istringstream iss(this->fields.at(key));
 	std::string token;
@@ -129,77 +130,6 @@ std::vector<int> Excel::get_ints(const std::string key) {
 	}
 	return ints;
 }
-
-//
-// small wrapper for lua stack access
-//
-
-/*struct LuaIndex {
-public:
-	LuaIndex(lua_State *L);
-	bool push_global_table(const char *global);
-	bool push_field_table(const char *key);
-	void push_nil();
-	bool next();
-	lua_Integer get_int(int idx);
-	lua_Number get_field_number(const char *key, lua_Number def = 0.0f);
-	lua_Integer get_field_int(const char *key, lua_Integer def = 0);
-	bool get_field_bool(const char *key, bool def = false);
-	void pop(int n = 1);
-private:
-	lua_State *L;
-};
-
-LuaIndex::LuaIndex(lua_State *L) : L(L) {}
-bool LuaIndex::push_global_table(const char *global) {
-	return lua_getglobal(this->L, global) == LUA_TTABLE;
-}
-bool LuaIndex::push_field_table(const char *key) {
-	lua_pushstring(this->L, key);
-	return lua_gettable(this->L, -2) == LUA_TTABLE;
-}
-void LuaIndex::push_nil() {
-	lua_pushnil(this->L);
-}
-bool LuaIndex::next() {
-	return lua_next(this->L, -2);
-}
-lua_Integer LuaIndex::get_int(int idx) {
-	return lua_tointeger(this->L, idx);
-}
-lua_Number LuaIndex::get_field_number(const char *key, lua_Number def) {
-	lua_Number r;
-	if (lua_getfield(this->L, -1, key) == LUA_TNUMBER) {
-		r = lua_tonumber(this->L, -1);
-	} else {
-		r = def;
-	}
-	lua_pop(this->L, 1);
-	return r;
-}
-lua_Integer LuaIndex::get_field_int(const char *key, lua_Integer def) {
-	lua_Integer r;
-	if (lua_getfield(this->L, -1, key) == LUA_TNUMBER) {
-		r = lua_tointeger(this->L, -1);
-	} else {
-		r = def;
-	}
-	lua_pop(this->L, 1);
-	return r;
-}
-bool LuaIndex::get_field_bool(const char *key, bool def) {
-	lua_Integer r;
-	if (lua_getfield(this->L, -1, key) == LUA_TNUMBER) {
-		r = lua_toboolean(this->L, -1);
-	} else {
-		r = def;
-	}
-	lua_pop(this->L, 1);
-	return r;
-}
-void LuaIndex::pop(int n) {
-	lua_pop(this->L, n);
-}*/
 
 //
 // binoutput json stuff
@@ -211,7 +141,7 @@ void from_json(const nlohmann::json &json, Vec3f &vec) {
 	vec.z = json.value("z", 0.0f);
 }
 void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoint &configscenepoint) {
-	json.at("$type").get_to(configscenepoint.type);
+	json.at("$type").get_to(configscenepoint.$type);
 
 	nlohmann::json::const_iterator json_tranpos = json.find("tranPos");
 	if (json_tranpos != json.end() && json_tranpos->is_object()) {
@@ -242,7 +172,7 @@ void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScene &co
 static bool error = false;
 
 template <typename T>
-void load_excel(const char *filename, std::unordered_map<int, T> *map, const char *key_column, void (*proc)(T *data, Excel *excel)) {
+void load_excel(const char *filename, std::unordered_map<int, T> *map, const char *key_column, void (*proc)(T *data, const Excel *excel)) {
 	if (!std::filesystem::exists(filename)) {
 		soggy_log("error!!!: %s does not exist", filename);
 		error = true;
@@ -261,15 +191,23 @@ void load_excel(const char *filename, std::unordered_map<int, T> *map, const cha
 
 bool load_game_data() {
 	// AvatarData
-	load_excel<exceloutput::AvatarData>("resources/exceloutput/AvatarData.tsv", &exceloutput::avatar_datas, "ID", [](exceloutput::AvatarData *avatar, Excel *excel) {
+	load_excel<exceloutput::AvatarData>("resources/exceloutput/AvatarData.tsv", &exceloutput::avatar_datas, "ID", [](exceloutput::AvatarData *avatar, const Excel *excel) {
 		avatar->skill_depot_id = excel->get_int("技能库ID");
+		avatar->candidate_skill_depot_ids = excel->get_ints("候选技能库ID");
+		for (auto it = avatar->candidate_skill_depot_ids.begin(); it != avatar->candidate_skill_depot_ids.end();) {
+			if (*it == 0) {
+				avatar->candidate_skill_depot_ids.erase(it);
+			} else {
+				it++;
+			}
+		}
 		avatar->initial_weapon_id = excel->get_int("初始武器");
 		avatar->weapon_type = (WeaponType)excel->get_int("武器种类");
 		avatar->use_type = (AvatarUseType)excel->get_int("是否使用");
 	});
 
 	// AvatarSkillDepotData
-	load_excel<exceloutput::AvatarSkillDepotData>("resources/exceloutput/AvatarSkillDepotData.tsv", &exceloutput::avatar_skill_depot_datas, "ID", [](exceloutput::AvatarSkillDepotData *avatar_skill_depot, Excel *excel) {
+	load_excel<exceloutput::AvatarSkillDepotData>("resources/exceloutput/AvatarSkillDepotData.tsv", &exceloutput::avatar_skill_depot_datas, "ID", [](exceloutput::AvatarSkillDepotData *avatar_skill_depot, const Excel *excel) {
 		avatar_skill_depot->leader_talent = excel->get_int("队长天赋");
 		for (int i = 0; i < 10; i++) {
 			int group = excel->get_int("天赋组" + std::to_string(i + 1));
@@ -280,20 +218,20 @@ bool load_game_data() {
 	});
 
 	// AvatarSkillData
-	load_excel<exceloutput::AvatarSkillData>("resources/exceloutput/AvatarSkillData.tsv", &exceloutput::avatar_skill_datas, "ID", [](exceloutput::AvatarSkillData *avatar_skill, Excel *excel) {
+	load_excel<exceloutput::AvatarSkillData>("resources/exceloutput/AvatarSkillData.tsv", &exceloutput::avatar_skill_datas, "ID", [](exceloutput::AvatarSkillData *avatar_skill, const Excel *excel) {
 		avatar_skill->energy_type = (ElementType)excel->get_int("消耗能量类型");
 		avatar_skill->energy_cost = excel->get_int("消耗能量值");
 		avatar_skill->max_charges = excel->get_int("可累积次数", 1);
 	});
 
 	// MaterialData
-	load_excel<exceloutput::ItemData>("resources/exceloutput/MaterialData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, Excel *excel) {
+	load_excel<exceloutput::ItemData>("resources/exceloutput/MaterialData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, const Excel *excel) {
 		item->type = (ItemType)excel->get_int("类型");
 		item->equip_type = EquipType::EQUIP_NONE;
 	});
 
 	// WeaponData
-	load_excel<exceloutput::ItemData>("resources/exceloutput/WeaponData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, Excel *excel) {
+	load_excel<exceloutput::ItemData>("resources/exceloutput/WeaponData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, const Excel *excel) {
 		item->type = (ItemType)excel->get_int("类型");
 		item->weapon.gadget_id = excel->get_int("物件ID");
 		item->weapon.weapon_type = (WeaponType)excel->get_int("武器阶数");
@@ -301,19 +239,19 @@ bool load_game_data() {
 	});
 
 	// ReliquaryData
-	load_excel<exceloutput::ItemData>("resources/exceloutput/ReliquaryData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, Excel *excel) {
+	load_excel<exceloutput::ItemData>("resources/exceloutput/ReliquaryData.tsv", &exceloutput::item_datas, "ID", [](exceloutput::ItemData *item, const Excel *excel) {
 		item->type = (ItemType)excel->get_int("类型");
 		item->equip_type = (EquipType)excel->get_int("圣遗物类别");
 	});
 
 	// ShopPlanData
-	load_excel<exceloutput::ShopPlanData>("resources/exceloutput/ShopPlanData.tsv", &exceloutput::shop_plan_datas, "ID", [](exceloutput::ShopPlanData *shop_plan, Excel *excel) {
+	load_excel<exceloutput::ShopPlanData>("resources/exceloutput/ShopPlanData.tsv", &exceloutput::shop_plan_datas, "ID", [](exceloutput::ShopPlanData *shop_plan, const Excel *excel) {
 		shop_plan->shop_type = excel->get_int("商店类型");
 		shop_plan->goods_id = excel->get_int("商品ID");
 	});
 
 	// ShopGoodsData
-	load_excel<exceloutput::ShopGoodsData>("resources/exceloutput/ShopGoodsData.tsv", &exceloutput::shop_goods_datas, "商品ID", [](exceloutput::ShopGoodsData *shop_goods, Excel *excel) {
+	load_excel<exceloutput::ShopGoodsData>("resources/exceloutput/ShopGoodsData.tsv", &exceloutput::shop_goods_datas, "商品ID", [](exceloutput::ShopGoodsData *shop_goods, const Excel *excel) {
 		shop_goods->result_item_id = excel->get_int("对应物品ID");
 		shop_goods->result_item_count = excel->get_int("对应物品数量");
 		shop_goods->mora_cost = excel->get_int("消耗金币");
@@ -326,23 +264,38 @@ bool load_game_data() {
 	});
 
 	// TalentSkillData
-	load_excel<exceloutput::TalentSkillData>("resources/exceloutput/TalentSkillData.tsv", &exceloutput::talent_skill_datas, "天赋ID", [](exceloutput::TalentSkillData *talent_skill, Excel *excel) {
+	load_excel<exceloutput::TalentSkillData>("resources/exceloutput/TalentSkillData.tsv", &exceloutput::talent_skill_datas, "天赋ID", [](exceloutput::TalentSkillData *talent_skill, const Excel *excel) {
 		talent_skill->talent_group_id = excel->get_int("天赋组ID");
 		talent_skill->rank = excel->get_int("等级");
 	});
 
 	// GadgetData
-	load_excel<exceloutput::GadgetData>("resources/exceloutput/GadgetData.tsv", &exceloutput::gadget_datas, "ID", [](exceloutput::GadgetData *gadget, Excel *excel) {
-		gadget->default_camp = excel->get_int("默认阵营");
-		gadget->is_interactive = (bool)excel->get_int("能否交互");
-	});
+	const auto load_gadgets = [&](const char *filename) {
+		load_excel<exceloutput::GadgetData>(filename, &exceloutput::gadget_datas, "ID", [](exceloutput::GadgetData *gadget, const Excel *excel) {
+			gadget->default_camp = excel->get_int("默认阵营");
+			gadget->is_interactive = (bool)excel->get_int("能否交互");
+			gadget->entity_type = (EntityType)excel->get_int("类型");
+		});
+	};
+	load_gadgets("resources/exceloutput/GadgetData.tsv");
+	load_gadgets("resources/exceloutput/GadgetData_Avatar.tsv");
+	load_gadgets("resources/exceloutput/GadgetData_Level.tsv");
+	load_gadgets("resources/exceloutput/GadgetData_Monster.tsv");
+	load_gadgets("resources/exceloutput/GadgetData_Equip.tsv");
 
 	// MonsterData
-	load_excel<exceloutput::MonsterData>("resources/exceloutput/MonsterData.tsv", &exceloutput::monster_datas, "ID", [](exceloutput::MonsterData *monster, Excel *excel) {
+	load_excel<exceloutput::MonsterData>("resources/exceloutput/MonsterData.tsv", &exceloutput::monster_datas, "ID", [](exceloutput::MonsterData *monster, const Excel *excel) {
+		monster->equip_1 = excel->get_int("装备1");
+		monster->equip_2 = excel->get_int("装备2");
 	});
 
 	// NpcData
-	load_excel<exceloutput::NpcData>("resources/exceloutput/NpcData.tsv", &exceloutput::npc_datas, "ID", [](exceloutput::NpcData *npc, Excel *excel) {
+	load_excel<exceloutput::NpcData>("resources/exceloutput/NpcData.tsv", &exceloutput::npc_datas, "ID", [](exceloutput::NpcData *npc, const Excel *excel) {
+	});
+
+	// SceneData
+	load_excel<exceloutput::SceneData>("resources/exceloutput/SceneData.tsv", &exceloutput::scene_datas, "ID", [](exceloutput::SceneData *scene, const Excel *excel) {
+		scene->type = (SceneType)excel->get_int("类型");
 	});
 
 	// scene configs
@@ -369,4 +322,241 @@ bool load_game_data() {
 	}
 
 	return error;
+}
+
+void soglua_get_float(lua_State *L, const char *key, float *num) {
+	if (lua_getfield(L, -1, key) == LUA_TNUMBER) {
+		*num = lua_tonumber(L, -1);
+	}
+	lua_pop(L, 1);
+}
+
+void soglua_get_int(lua_State *L, const char *key, int *num) {
+	if (lua_getfield(L, -1, key) == LUA_TNUMBER) {
+		*num = lua_tointeger(L, -1);
+	}
+	lua_pop(L, 1);
+}
+
+void soglua_get_bool(lua_State *L, const char *key, bool *num) {
+	if (lua_getfield(L, -1, key) == LUA_TBOOLEAN) {
+		*num = lua_toboolean(L, -1);
+	}
+	lua_pop(L, 1);
+}
+
+void soglua_get_vec2f(lua_State *L, const char *key, Vec2f *vec) {
+	lua_pushstring(L, key);
+	if (lua_gettable(L, -2) == LUA_TTABLE) {
+		soglua_get_float(L, "x", &vec->x);
+		soglua_get_float(L, "z", &vec->z);
+	}
+	lua_pop(L, 1);
+}
+
+void soglua_get_vec3f(lua_State *L, const char *key, Vec3f *vec) {
+	lua_pushstring(L, key);
+	if (lua_gettable(L, -2) == LUA_TTABLE) {
+		soglua_get_float(L, "x", &vec->x);
+		soglua_get_float(L, "y", &vec->y);
+		soglua_get_float(L, "z", &vec->z);
+	}
+	lua_pop(L, 1);
+}
+
+void soglua_set_int(lua_State *L, const char *key, lua_Integer i) {
+	lua_pushinteger(L, i);
+	lua_setfield(L, -2, key);
+}
+
+bool load_scene_script_data(int sceneid) {
+	if (luares::scene_configs.find(sceneid) != luares::scene_configs.end()) {
+		// already loaded
+		return true;
+	}
+
+	soggy_log("read scene script data for sceneid %d", sceneid);
+
+	// lua init
+	lua_State *L = luaL_newstate();
+	luaL_openlibs(L);
+
+	// add ./resources/lua to require path
+	lua_getglobal(L, "package");
+	lua_getfield(L, -1, "path");
+	std::string path(lua_tostring(L, -1));
+	path += ";./resources/lua/?.lua";
+	lua_pop(L, 1);
+	lua_pushstring(L, path.c_str());
+	lua_setfield(L, -2, "path");
+	lua_pop(L, 1);
+
+	if (luaL_dofile(L, "resources/lua/Config/DefineCommon.lua") != LUA_OK) {
+		soggy_log("error!!!: resources/lua/Config/DefineCommon.lua does not exist");
+		return false;
+	}
+
+	// hack? the enum for GadgetState in the luas is completely wrong??
+	assert(lua_getglobal(L, "GadgetState") == LUA_TTABLE);
+	soglua_set_int(L, "Default", GadgetState::GADGET_STATE_Default);
+	soglua_set_int(L, "ChestLocked", GadgetState::GADGET_STATE_ChestLocked);
+	soglua_set_int(L, "GearStart", GadgetState::GADGET_STATE_GearStart);
+	soglua_set_int(L, "GearStop", GadgetState::GADGET_STATE_GearStop);
+	soglua_set_int(L, "CrystalResonate1", GadgetState::GADGET_STATE_CrystalResonate1);
+	soglua_set_int(L, "CrystalResonate2", GadgetState::GADGET_STATE_CrystalResonate2);
+	soglua_set_int(L, "CrystalExplode", GadgetState::GADGET_STATE_CrystalExplode);
+	soglua_set_int(L, "CrystalDrain", GadgetState::GADGET_STATE_CrystalDrain);
+	lua_pop(L, 1);
+
+	{
+		std::string scene_lua_path = "resources/lua/Scene/" + std::to_string(sceneid) + "/scene" + std::to_string(sceneid) + ".lua";
+		if (luaL_dofile(L, scene_lua_path.c_str()) != LUA_OK) {
+			soggy_log("error!!!: %s does not exist", scene_lua_path.c_str());
+			return false;
+		}
+	}
+	luares::SceneConfig *scene_config = &luares::scene_configs[sceneid];
+
+	// scene_config
+	lua_getglobal(L, "scene_config");
+		soglua_get_vec3f(L, "born_pos", &scene_config->born_pos);
+		soglua_get_vec3f(L, "born_rot", &scene_config->born_rot);
+		soglua_get_float(L, "die_y", &scene_config->die_y);
+	lua_pop(L, 1);
+
+	// blocks
+	std::vector<int> block_ids;
+	if (lua_getglobal(L, "blocks") == LUA_TTABLE) {
+		lua_pushnil(L);
+		while (lua_next(L, -2)) { // key=-2, value=-1
+			int block_id = lua_tointeger(L, -1);
+			block_ids.push_back(block_id);
+			luares::SceneBlock *block = &scene_config->blocks[block_id];
+			block->id = block_id;
+			lua_pop(L, 1);
+		}
+	}
+	lua_pop(L, 1);
+
+	// block_rects
+	if (lua_getglobal(L, "block_rects") == LUA_TTABLE) {
+		lua_pushnil(L);
+		int i = 0;
+		while (lua_next(L, -2)) { // key=-2, value=-1
+			int block_id = block_ids[i++];
+			luares::SceneBlock *block = &scene_config->blocks[block_id];
+			soglua_get_vec2f(L, "min", &block->min);
+			soglua_get_vec2f(L, "max", &block->max);
+			lua_pop(L, 1);
+		}
+	}
+	lua_pop(L, 1);
+
+	// read each block
+	for (auto &it : scene_config->blocks) {
+		int block_id = it.first;
+		luares::SceneBlock *block = &it.second;
+
+		{
+			std::string block_lua_path = "resources/lua/Scene/" + std::to_string(sceneid) + "/scene" + std::to_string(sceneid) + "_block" + std::to_string(block_id) + ".lua";
+			if (luaL_dofile(L, block_lua_path.c_str()) != LUA_OK) {
+				soggy_log("error!!!: %s does not exist", block_lua_path.c_str());
+				return false;
+			}
+		}
+
+		if (lua_getglobal(L, "groups") == LUA_TTABLE) {
+			lua_pushnil(L);
+			while (lua_next(L, -2)) { // key=-2, value=-1
+				int group_id = 0;
+				soglua_get_int(L, "id", &group_id);
+				luares::SceneGroup *group = &block->groups[group_id];
+				group->id = group_id;
+
+				soglua_get_int(L, "area", &group->area);
+				soglua_get_vec3f(L, "pos", &group->pos);
+
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);
+
+		// read each group
+		for (auto &it : block->groups) {
+			int group_id = it.first;
+			luares::SceneGroup *group = &it.second;
+
+			{
+				std::string group_lua_path = "resources/lua/Scene/" + std::to_string(sceneid) + "/scene" + std::to_string(sceneid) + "_group" + std::to_string(group_id) + ".lua";
+				if (luaL_dofile(L, group_lua_path.c_str()) != LUA_OK) {
+					soggy_log("error!!!: %s does not exist", group_lua_path.c_str());
+					return false;
+				}
+			}
+
+			// gadgets
+			if (lua_getglobal(L, "gadgets") == LUA_TTABLE) {
+				lua_pushnil(L);
+				while (lua_next(L, -2)) { // key=-2, value=-1
+					luares::SceneEntity *gadget = &group->gadgets.emplace_back();
+
+					soglua_get_vec3f(L, "pos", &gadget->pos);
+					soglua_get_vec3f(L, "rot", &gadget->rot);
+					soglua_get_int(L, "config_id", &gadget->config_id);
+					soglua_get_int(L, "gadget_id", &gadget->gadget.gadget_id);
+					soglua_get_int(L, "level", &gadget->gadget.level);
+					soglua_get_int(L, "route_id", &gadget->gadget.route_id);
+					soglua_get_bool(L, "save_route", &gadget->gadget.save_route);
+					soglua_get_bool(L, "persistent", &gadget->gadget.persistent);
+					soglua_get_int(L, "state", (int *)&gadget->gadget.state);
+					soglua_get_int(L, "type", (int *)&gadget->gadget.type);
+					soglua_get_int(L, "point_type", &gadget->gadget.point_type);
+					soglua_get_int(L, "owner", &gadget->gadget.owner);
+
+					lua_pop(L, 1);
+				}
+			}
+			lua_pop(L, 1);
+
+			// monsters
+			if (lua_getglobal(L, "monsters") == LUA_TTABLE) {
+				lua_pushnil(L);
+				while (lua_next(L, -2)) { // key=-2, value=-1
+					luares::SceneEntity *monster = &group->monsters.emplace_back();
+
+					soglua_get_vec3f(L, "pos", &monster->pos);
+					soglua_get_vec3f(L, "rot", &monster->rot);
+					soglua_get_int(L, "config_id", &monster->config_id);
+					soglua_get_int(L, "monster_id", &monster->monster.monster_id);
+					soglua_get_int(L, "level", &monster->monster.level);
+					soglua_get_int(L, "drop_id", &monster->monster.drop_id);
+					soglua_get_bool(L, "disableWander", &monster->monster.disable_wander);
+
+					lua_pop(L, 1);
+				}
+			}
+			lua_pop(L, 1);
+
+			// npcs
+			if (lua_getglobal(L, "npcs") == LUA_TTABLE) {
+				lua_pushnil(L);
+				while (lua_next(L, -2)) { // key=-2, value=-1
+					luares::SceneEntity *npc = &group->npcs.emplace_back();
+
+					soglua_get_vec3f(L, "pos", &npc->pos);
+					soglua_get_vec3f(L, "rot", &npc->rot);
+					soglua_get_int(L, "config_id", &npc->config_id);
+					soglua_get_int(L, "npc_id", &npc->npc.npc_id);
+					soglua_get_int(L, "pointID", &npc->npc.point_id);
+
+					lua_pop(L, 1);
+				}
+			}
+			lua_pop(L, 1);
+		}
+	}
+
+	lua_close(L);
+
+	return true;
 }

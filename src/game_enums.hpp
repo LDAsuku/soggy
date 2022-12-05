@@ -315,6 +315,14 @@ enum EntityType {
 	ENTITY_PlaceHolder = 99
 };
 
+enum MonsterType {
+	MONSTER_NONE,
+	MONSTER_ORDINARY,
+	MONSTER_BOSS,
+	MONSTER_ENV_ANIMAL,
+	MONSTER_LITTLE_MONSTER
+};
+
 // names from lua sources
 enum EventType {
 	EVENT_NONE = 0,
@@ -343,4 +351,11 @@ enum EventType {
 	EVENT_AREA_LEVELUP = 23,
 	EVENT_CUTSCENE_END = 24,
 	EVENT_AVATAR_NEAR_PLATFORM = 25 // "a character is close to a stopped moving platform (sent by the client)"
+};
+
+// names from lua sources
+enum RegionShape {
+	REGION_NONE = 0,
+	REGION_SPHERE = 1,
+	REGION_CUBIC = 2
 };
