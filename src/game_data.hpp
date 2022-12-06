@@ -99,6 +99,12 @@ struct SceneData {
 	SceneType type; //类型
 };
 
+struct DungeonData {
+	int id; //ID
+	int scene_id; //场景ID
+	int daily_limit; //每天准入次数
+};
+
 extern std::unordered_map<int, AvatarData> avatar_datas;
 extern std::unordered_map<int, AvatarSkillDepotData> avatar_skill_depot_datas;
 extern std::unordered_map<int, AvatarSkillData> avatar_skill_datas;
@@ -110,6 +116,7 @@ extern std::unordered_map<int, GadgetData> gadget_datas;
 extern std::unordered_map<int, MonsterData> monster_datas;
 extern std::unordered_map<int, NpcData> npc_datas;
 extern std::unordered_map<int, SceneData> scene_datas;
+extern std::unordered_map<int, DungeonData> dungeon_datas;
 
 extern std::unordered_map<std::string, std::string> text_map;
 
@@ -119,9 +126,14 @@ namespace binoutput {
 
 struct ConfigScenePoint {
 	std::string $type;
+	Vec3f pos;
+	Vec3f rot;
 	Vec3f tranpos;
 	Vec3f tranrot;
 	int transceneid = 0; // only used by PersonalSceneJumpPoint
+	std::vector<int> dungeon_ids;
+	int dungeon_entry_point_id = 0; // used by DungeonExit: this is the point id of the corresponding entry
+	int dungeon_exit_point_id = 0; // used by DungoeonEntry: this is the point id of the corresponding exit
 };
 
 struct ConfigScene {

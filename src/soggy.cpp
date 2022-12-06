@@ -56,7 +56,6 @@
 #include "proto/OpenStateUpdateNotify.pb.h"
 #include "proto/PlayerDataNotify.pb.h"
 #include "proto/PlayerLoginReq.pb.h"
-#include "proto/PlayerPropNotify.pb.h"
 #include "proto/PlayerEnterSceneNotify.pb.h"
 #include "proto/PlayerLoginRsp.pb.h"
 #include "proto/PingReq.pb.h"
@@ -111,9 +110,14 @@
 #include "proto/PlayerGameTimeNotify.pb.h"
 #include "proto/PersonalSceneJumpReq.pb.h"
 #include "proto/PersonalSceneJumpRsp.pb.h"
-#include "proto/PersonalSceneJumpRsp.pb.h"
-#include "proto/EntityJumpNotify.pb.h"
 #include "proto/AllSeenMonsterNotify.pb.h"
+#include "proto/DungeonEntryInfoReq.pb.h"
+#include "proto/DungeonEntryInfoRsp.pb.h"
+#include "proto/DungeonEntryInfo.pb.h"
+#include "proto/PlayerEnterDungeonReq.pb.h"
+#include "proto/PlayerEnterDungeonRsp.pb.h"
+#include "proto/PlayerQuitDungeonReq.pb.h"
+#include "proto/PlayerQuitDungeonRsp.pb.h"
 #include "proto/cmdids.hpp"
 
 // soggy
@@ -206,7 +210,7 @@ struct YSPlayerItem {
 
 struct YSEntity {
 	// runtime state
-	int entity_id;
+	int runtime_entity_id;
 	ProtEntityType entity_type;
 	bool alive = true;
 	Vec3f pos;
@@ -281,6 +285,7 @@ struct YSPlayer {
 	bool has_sent_avatardatanotify = false;
 	YSLocation current_location;
 	YSLocation safe_location;
+	YSLocation return_location;
 	std::unordered_map<int, YSEntity> scene_entities;
 	int team_entity_id = 0;
 	std::unordered_set<int> loaded_groups;
@@ -308,6 +313,7 @@ struct YSPlayer {
 	void switch_avatar(int guid);
 	void make_player_enter_scene_notify_proto(PlayerEnterSceneNotify *playerenterscenenotify, EnterType entertype, int prev_sceneid);
 	void enter_scene(int sceneid, Vec3f pos, Vec3f rot);
+	void enter_scene_spawn(int sceneid);
 	void scene_flush_entities();
 	void changed_position(); // updates loaded groups
 	void scene_load_group(const luares::SceneGroup *group);
@@ -354,7 +360,7 @@ void pb_add_prop_pair(google::protobuf::Map<uint32_t, PropValue> *map, PropType 
 #define COLOR_SERVER_TO_CLIENT "\x1b[38;5;215m"
 #define COLOR_RESET "\x1b[0m"
 
-std::unordered_set<unsigned short> dont_log_cmds = { CMD_ID_PingReq, CMD_ID_SceneEntityMoveReq, CMD_ID_EvtAnimatorParameterNotify, CMD_ID_EntityForceSyncReq, CMD_ID_SceneAvatarStaminaStepReq, CMD_ID_EvtFaceToDirNotify, CMD_ID_EvtAvatarUpdateFocusNotify, CMD_ID_AbilityInvocationsNotify, CMD_ID_AbilityInvocationFixedNotify, CMD_ID_ClientAbilityInitFinishNotify, CMD_ID_PingRsp, CMD_ID_PlayerStoreNotify, CMD_ID_EvtSetAttackTargetNotify, CMD_ID_EvtBeingHitNotify };
+std::unordered_set<unsigned short> dont_log_cmds = { CMD_ID_PingReq, CMD_ID_SceneEntityMoveReq, CMD_ID_EvtAnimatorParameterNotify, CMD_ID_EntityForceSyncReq, CMD_ID_SceneAvatarStaminaStepReq, CMD_ID_EvtFaceToDirNotify, CMD_ID_EvtAvatarUpdateFocusNotify, CMD_ID_AbilityInvocationsNotify, CMD_ID_AbilityInvocationFixedNotify, CMD_ID_ClientAbilityInitFinishNotify, CMD_ID_PingRsp, CMD_ID_PlayerStoreNotify, CMD_ID_EvtSetAttackTargetNotify, CMD_ID_EvtBeingHitNotify, CMD_ID_EvtEntityRenderersChangedNotify, CMD_ID_SceneEntityDrownReq };
 
 void YSConnection::send_packet(const google::protobuf::Message *body) {
 	const cmdids::CmdIdDetail *detail = cmdids::cmd_name_to_detail[body->GetTypeName()];
@@ -364,7 +370,6 @@ void YSConnection::send_packet(const google::protobuf::Message *body) {
 	}
 
 	enet_peer_send(this->peer, detail->enet_channel_id, packet);
-	enet_host_flush(this->peer->host);
 
 	if (dont_log_cmds.find(detail->cmdid) == dont_log_cmds.end()) {
 		std::string json_string;
@@ -428,7 +433,6 @@ void YSPlayer::enter_scene(int sceneid, Vec3f pos, Vec3f rot) {
 	this->current_location.sceneid = sceneid;
 	this->current_location.pos = pos;
 	this->current_location.rot = rot;
-	this->changed_position();
 
 	EnterType entertype;
 	if (this->current_location.sceneid != prev_sceneid) {
@@ -449,6 +453,23 @@ void YSPlayer::enter_scene(int sceneid, Vec3f pos, Vec3f rot) {
 	PlayerEnterSceneNotify playerenterscenenotify;
 	this->make_player_enter_scene_notify_proto(&playerenterscenenotify, entertype, prev_sceneid);
 	conn->send_packet(&playerenterscenenotify);
+}
+
+void YSPlayer::enter_scene_spawn(int sceneid) {
+	load_scene_script_data(sceneid);
+
+	Vec3f spawn_pos;
+	Vec3f spawn_rot;
+	try {
+		luares::SceneConfig *config = &luares::scene_configs.at(sceneid);
+		spawn_pos = config->born_pos;
+		spawn_rot = config->born_rot;
+	} catch (std::out_of_range &) {
+		soggy_log("warn: no spawn point for scene %d, using (0, 300, 0)", sceneid);
+		spawn_pos.y = 300.0f;
+	}
+
+	this->enter_scene(sceneid, spawn_pos, spawn_rot);
 }
 
 float distance(const Vec3f v1, const Vec3f v2) {
@@ -538,7 +559,7 @@ void YSPlayer::scene_unload_group(const luares::SceneGroup *group) {
 	for (auto &it : this->scene_entities) {
 		const YSEntity *entity = &it.second;
 		if (entity->belong_group_id == group->id) {
-			this->scene_despawn_entity(entity->entity_id);
+			this->scene_despawn_entity(entity->runtime_entity_id);
 		}
 	}
 }
@@ -631,7 +652,7 @@ void YSPlayerItem::make_item_proto(Item *item) const {
 
 void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) const {
 	sceneentityinfo->set_entitytype(this->entity_type);
-	sceneentityinfo->set_entityid(this->entity_id);
+	sceneentityinfo->set_entityid(this->runtime_entity_id);
 	pb_make_vector(sceneentityinfo->mutable_motioninfo()->mutable_pos(), &this->pos);
 	pb_make_vector(sceneentityinfo->mutable_motioninfo()->mutable_rot(), &this->rot);
 	sceneentityinfo->set_lifestate(LifeState::LIFE_ALIVE);
@@ -950,7 +971,7 @@ YSEntity *YSPlayer::scene_spawn_gadget(int gadget_id) {
 	//const exceloutput::GadgetData *excel_gadget = &exceloutput::gadget_datas.at(gadget_id);
 
 	YSEntity *entity = &this->scene_entities[entity_id];
-	entity->entity_id = entity_id;
+	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_GADGET;
 	entity->gadget.gadget_id = gadget_id;
 	return entity;
@@ -962,7 +983,7 @@ YSEntity *YSPlayer::scene_spawn_monster(int monster_id) {
 	const exceloutput::MonsterData *excel_monster = &exceloutput::monster_datas.at(monster_id);
 
 	YSEntity *entity = &this->scene_entities[entity_id];
-	entity->entity_id = entity_id;
+	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_MONSTER;
 	entity->monster.monster_id = monster_id;
 
@@ -982,7 +1003,7 @@ YSEntity *YSPlayer::scene_spawn_npc(int npc_id) {
 	//const exceloutput::NpcData *excel_npc = &exceloutput::npc_datas.at(npc_id);
 
 	YSEntity *entity = &this->scene_entities[entity_id];
-	entity->entity_id = entity_id;
+	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_NPC;
 	entity->npc.npc_id = npc_id;
 	return entity;
@@ -1029,13 +1050,13 @@ void init_mainplayer() {
 		}
 	}
 
-	// in front of the cathedral
+	// in front of temple of the falcon
 	mainplayer.current_location.sceneid = 3;
-	mainplayer.current_location.pos.x = 2352.869f;
-	mainplayer.current_location.pos.y = 259.998f;
-	mainplayer.current_location.pos.z = -691.396f;
+	mainplayer.current_location.pos.x = 2136.926f;
+	mainplayer.current_location.pos.y = 208.130f;
+	mainplayer.current_location.pos.z = -1172.234f;
 	mainplayer.current_location.rot.x = 0.0f;
-	mainplayer.current_location.rot.y = 23.880f;
+	mainplayer.current_location.rot.y = 157.219f;
 	mainplayer.current_location.rot.z = 0.0f;
 }
 
@@ -1186,13 +1207,7 @@ void handle_EnterSceneReadyReq(YSConnection *conn, const EnterSceneReadyReq *ent
 void handle_GetScenePointReq(YSConnection *conn, const GetScenePointReq *getscenepointreq) {
 	// future: check belonguid in multiplayer
 
-	const binoutput::ConfigScene *scene;
-	try {
-		scene = &binoutput::scene_points.at(getscenepointreq->sceneid());
-	} catch (const std::out_of_range &) {
-		conn->send_empty_rsp_with_retcode<GetScenePointRsp>(Retcode::RET_FAIL);
-		return;
-	}
+	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(getscenepointreq->sceneid());
 
 	GetScenePointRsp getscenepointrsp;
 	getscenepointrsp.set_retcode(Retcode::RET_SUCC);
@@ -1316,14 +1331,8 @@ void handle_SceneEntityMoveReq(YSConnection *conn, const SceneEntityMoveReq *sce
 }
 
 void handle_SceneTransToPointReq(YSConnection *conn, const SceneTransToPointReq *scenetranstopointreq) {
-	const binoutput::ConfigScenePoint *point;
-	try {
-		const binoutput::ConfigScene *scene = &binoutput::scene_points.at(scenetranstopointreq->sceneid());
-		point = &scene->points.at(scenetranstopointreq->pointid());
-	} catch (std::out_of_range &) {
-		conn->send_empty_rsp_with_retcode<SceneTransToPointRsp>(Retcode::RET_ENTER_SCENE_FAIL);
-		return;
-	}
+	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(scenetranstopointreq->sceneid());
+	const binoutput::ConfigScenePoint *point = &scene->points.at(scenetranstopointreq->pointid());
 
 	conn->player->enter_scene(scenetranstopointreq->sceneid(), point->tranpos, point->tranrot);
 
@@ -1335,21 +1344,61 @@ void handle_SceneTransToPointReq(YSConnection *conn, const SceneTransToPointReq 
 }
 
 void handle_PersonalSceneJumpReq(YSConnection *conn, const PersonalSceneJumpReq *personalscenejumpreq) {
-	const binoutput::ConfigScenePoint *point;
-	try {
-		const binoutput::ConfigScene *scene = &binoutput::scene_points.at(conn->player->current_location.sceneid);
-		point = &scene->points.at(personalscenejumpreq->pointid());
-	} catch (std::out_of_range &) {
-		conn->send_empty_rsp_with_retcode<PersonalSceneJumpRsp>(Retcode::RET_ENTER_SCENE_FAIL);
-		return;
-	}
+	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(conn->player->current_location.sceneid);
+	const binoutput::ConfigScenePoint *point = &scene->points.at(personalscenejumpreq->pointid());
 
 	conn->player->enter_scene(point->transceneid, point->tranpos, point->tranrot);
 
-    PersonalSceneJumpRsp personalscenejumprsp;
-    personalscenejumprsp.set_destsceneid(point->transceneid);
-    pb_make_vector(personalscenejumprsp.mutable_destpos(), &point->tranpos);
-    conn->send_packet(&personalscenejumprsp);
+	PersonalSceneJumpRsp personalscenejumprsp;
+	personalscenejumprsp.set_retcode(Retcode::RET_SUCC);
+	personalscenejumprsp.set_destsceneid(point->transceneid);
+	pb_make_vector(personalscenejumprsp.mutable_destpos(), &point->tranpos);
+	conn->send_packet(&personalscenejumprsp);
+}
+
+void handle_DungeonEntryInfoReq(YSConnection *conn, const DungeonEntryInfoReq *dungeonentryinforeq) {
+	DungeonEntryInfoRsp dungeonentryinforsp;
+	dungeonentryinforsp.set_retcode(Retcode::RET_SUCC);
+	dungeonentryinforsp.set_pointid(dungeonentryinforeq->pointid());
+
+	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(conn->player->current_location.sceneid);
+	const binoutput::ConfigScenePoint *point = &scene->points.at(dungeonentryinforeq->pointid());
+
+	for (const int dungeon_id : point->dungeon_ids) {
+		const exceloutput::DungeonData *excel_dungeon = &exceloutput::dungeon_datas.at(dungeon_id);
+
+		DungeonEntryInfo *dungeonentryinfo = dungeonentryinforsp.add_dungeonentrylist();
+		dungeonentryinfo->set_dungeonid(dungeon_id);
+		dungeonentryinfo->set_ispassed(false);
+		dungeonentryinfo->set_lefttimes(excel_dungeon->daily_limit);
+	}
+	conn->send_packet(&dungeonentryinforsp);
+}
+
+void handle_PlayerEnterDungeonReq(YSConnection *conn, const PlayerEnterDungeonReq *playerenterdungeonreq) {
+	const binoutput::ConfigScene *scene = &binoutput::scene_points.at(conn->player->current_location.sceneid);
+	const binoutput::ConfigScenePoint *entry_point = &scene->points.at(playerenterdungeonreq->pointid());
+	const binoutput::ConfigScenePoint *exit_point = &scene->points.at(entry_point->dungeon_exit_point_id);
+	const exceloutput::DungeonData *dungeon = &exceloutput::dungeon_datas.at(playerenterdungeonreq->dungeonid());
+
+	conn->player->return_location.sceneid = conn->player->current_location.sceneid;
+	conn->player->return_location.pos = exit_point->pos;
+	conn->player->return_location.rot = exit_point->rot;
+	conn->player->enter_scene_spawn(dungeon->scene_id);
+
+	PlayerEnterDungeonRsp playerenterdungeonrsp;
+	playerenterdungeonrsp.set_retcode(Retcode::RET_SUCC);
+	playerenterdungeonrsp.set_pointid(playerenterdungeonreq->pointid());
+	playerenterdungeonrsp.set_dungeonid(playerenterdungeonreq->dungeonid());
+	conn->send_packet(&playerenterdungeonrsp);
+}
+
+void handle_PlayerQuitDungeonReq(YSConnection *conn, const PlayerQuitDungeonReq *playerquitdungeonreq) {
+	conn->player->enter_scene(conn->player->return_location.sceneid, conn->player->return_location.pos, conn->player->return_location.rot);
+
+	PlayerQuitDungeonRsp playerquitdungeonrsp;
+	playerquitdungeonrsp.set_retcode(Retcode::RET_SUCC);
+	conn->send_packet(&playerquitdungeonrsp);
 }
 
 void handle_ChangeAvatarReq(YSConnection *conn, const ChangeAvatarReq *changeavatarreq) {
@@ -1620,30 +1669,53 @@ void game_server_main() {
 					soggy_log(COLOR_CLIENT_TO_SERVER "[client->server] %hu %s %s" COLOR_RESET, cmdid, cmdname, json_string.c_str());
 				}
 
-#define HANDLE(cmdname) case CMD_ID_##cmdname: handle_##cmdname(conn, reinterpret_cast<const cmdname *>(body)); break;
+// handle a packet, sending a specific rsp packet if an exception is caught
+#define HANDLE_RSP(req_cmdname, rsp_cmdname) \
+					case CMD_ID_##req_cmdname: \
+						try { \
+							handle_##req_cmdname(conn, reinterpret_cast<const req_cmdname *>(body)); \
+						} catch (const std::exception &exc) {\
+							soggy_log("%s", exc.what()); \
+							conn->send_empty_rsp_with_retcode<rsp_cmdname>(Retcode::RET_FAIL); \
+						} \
+						break;
+
+// handle a packet
+#define HANDLE(req_cmdname) \
+					case CMD_ID_##req_cmdname: \
+						try { \
+							handle_##req_cmdname(conn, reinterpret_cast<const req_cmdname *>(body)); \
+						} catch (const std::exception &exc) {\
+							soggy_log("%s", exc.what()); \
+						} \
+						break;
+
 				switch (cmdid) {
 					HANDLE(PingReq)
-					HANDLE(GetPlayerTokenReq)
-					HANDLE(PlayerLoginReq)
-					HANDLE(EnterSceneReadyReq)
-					HANDLE(GetScenePointReq)
-					HANDLE(GetSceneAreaReq)
-					HANDLE(SceneInitFinishReq)
-					HANDLE(EnterSceneDoneReq)
-					HANDLE(PlayerSetPauseReq)
-					HANDLE(SceneTransToPointReq)
+					HANDLE_RSP(GetPlayerTokenReq, GetPlayerTokenRsp)
+					HANDLE_RSP(PlayerLoginReq, PlayerLoginRsp)
+					HANDLE_RSP(EnterSceneReadyReq, EnterSceneReadyRsp)
+					HANDLE_RSP(GetScenePointReq, GetScenePointRsp)
+					HANDLE_RSP(GetSceneAreaReq, GetSceneAreaRsp)
+					HANDLE_RSP(SceneInitFinishReq, SceneInitFinishRsp)
+					HANDLE_RSP(EnterSceneDoneReq, EnterSceneDoneRsp)
+					HANDLE_RSP(PlayerSetPauseReq, PlayerSetPauseRsp)
+					HANDLE_RSP(SceneTransToPointReq, SceneTransToPointRsp)
 					HANDLE(SceneEntityMoveReq)
-					HANDLE(ChangeAvatarReq)
-					HANDLE(GetAllMailReq)
-					HANDLE(GetShopReq)
-					HANDLE(WearEquipReq)
-					HANDLE(TakeoffEquipReq)
-					HANDLE(SetUpAvatarTeamReq)
-					HANDLE(SceneGetAreaExplorePercentReq)
-					HANDLE(BuyGoodsReq)
+					HANDLE_RSP(ChangeAvatarReq, ChangeAvatarRsp)
+					HANDLE_RSP(GetAllMailReq, GetAllMailRsp)
+					HANDLE_RSP(GetShopReq, GetShopRsp)
+					HANDLE_RSP(WearEquipReq, WearEquipRsp)
+					HANDLE_RSP(TakeoffEquipReq, TakeoffEquipRsp)
+					HANDLE_RSP(SetUpAvatarTeamReq, SetUpAvatarTeamRsp)
+					HANDLE_RSP(SceneGetAreaExplorePercentReq, SceneGetAreaExplorePercentRsp)
+					HANDLE_RSP(BuyGoodsReq, BuyGoodsRsp)
 					HANDLE(ClientScriptEventNotify)
-					HANDLE(ChangeGameTimeReq)
-					HANDLE(PersonalSceneJumpReq)
+					HANDLE_RSP(ChangeGameTimeReq, ChangeGameTimeRsp)
+					HANDLE_RSP(PersonalSceneJumpReq, PersonalSceneJumpRsp)
+					HANDLE_RSP(DungeonEntryInfoReq, DungeonEntryInfoRsp)
+					HANDLE_RSP(PlayerEnterDungeonReq, PlayerEnterDungeonRsp)
+					HANDLE_RSP(PlayerQuitDungeonReq, PlayerQuitDungeonRsp)
 				}
 #undef HANDLE
 
@@ -1796,21 +1868,7 @@ void cmd_scene(YSConnection *target, std::string label, std::vector<std::string>
 		return;
 	}
 
-	load_scene_script_data(sceneid);
-
-	Vec3f spawn_pos;
-	Vec3f spawn_rot;
-	try {
-		luares::SceneConfig *config = &luares::scene_configs.at(sceneid);
-		spawn_pos = config->born_pos;
-		spawn_rot = config->born_rot;
-	} catch (std::out_of_range &) {
-		soggy_log("warn: no spawn point for scene %d, using (0, 300, 0)", sceneid);
-		spawn_pos = Vec3f(0.0f, 300.0f, 0.0f);
-		spawn_rot = Vec3f(0.0f, 0.0f, 0.0f);
-	}
-
-	target->player->enter_scene(sceneid, spawn_pos, spawn_rot);
+	target->player->enter_scene_spawn(sceneid);
 }
 
 void cmd_help(std::string label, std::vector<std::string> args) {
@@ -2033,6 +2091,11 @@ void non_interactive_main() {
 }
 
 int main(int argc, char *argv[]) {
+	puts("\x1b[1m░\x1b[0m Soggy is free software: you can redistribute it and/or modify it under the terms of");
+	puts("\x1b[1m░\x1b[0m   the GNU Affero General Public License as published by the Free Software Foundation,");
+	puts("\x1b[1m░\x1b[0m   either version 3 of the License, or (at your option) any later version.");
+	puts("\x1b[1m░\x1b[0m Homepage: https://github.com/LDAsuku/soggy");
+
 	if (load_game_data()) {
 		soggy_log("error loading resources");
 		return 1;

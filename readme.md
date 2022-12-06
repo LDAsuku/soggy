@@ -51,6 +51,8 @@ cmake --build build -j8
 
 Put the `resources` directory in the current working directory and run. Enter `help` in the interactive prompt to see a list of commands.
 
+Resources can be found on the repo wiki.
+
 ## Client patches
 
 ```

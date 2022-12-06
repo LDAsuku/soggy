@@ -44,6 +44,7 @@ namespace exceloutput {
 	std::unordered_map<int, MonsterData> monster_datas;
 	std::unordered_map<int, NpcData> npc_datas;
 	std::unordered_map<int, SceneData> scene_datas;
+	std::unordered_map<int, DungeonData> dungeon_datas;
 
 	std::unordered_map<std::string, std::string> text_map;
 }
@@ -143,6 +144,14 @@ void from_json(const nlohmann::json &json, Vec3f &vec) {
 void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoint &configscenepoint) {
 	json.at("$type").get_to(configscenepoint.$type);
 
+	nlohmann::json::const_iterator json_pos = json.find("pos");
+	if (json_pos != json.end() && json_pos->is_object()) {
+		json_pos->get_to(configscenepoint.pos);
+	}
+	nlohmann::json::const_iterator json_rot = json.find("rot");
+	if (json_rot != json.end() && json_rot->is_object()) {
+		json_rot->get_to(configscenepoint.rot);
+	}
 	nlohmann::json::const_iterator json_tranpos = json.find("tranPos");
 	if (json_tranpos != json.end() && json_tranpos->is_object()) {
 		json_tranpos->get_to(configscenepoint.tranpos);
@@ -154,6 +163,18 @@ void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoin
 	nlohmann::json::const_iterator json_transceneid = json.find("tranSceneId");
 	if (json_transceneid != json.end() && json_transceneid->is_number_integer()) {
 		json_transceneid->get_to(configscenepoint.transceneid);
+	}
+	nlohmann::json::const_iterator json_dungeonids = json.find("dungeonIds");
+	if (json_dungeonids != json.end() && json_dungeonids->is_array()) {
+		for (const auto &dungeon_id : *json_dungeonids) {
+			if (dungeon_id.is_number_integer()) {
+				dungeon_id.get_to(configscenepoint.dungeon_ids.emplace_back());
+			}
+		}
+	}
+	nlohmann::json::const_iterator json_entrypointid = json.find("entryPointId");
+	if (json_entrypointid != json.end() && json_entrypointid->is_number_integer()) {
+		json_entrypointid->get_to(configscenepoint.dungeon_entry_point_id);
 	}
 }
 void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScene &configscene) {
@@ -298,6 +319,12 @@ bool load_game_data() {
 		scene->type = (SceneType)excel->get_int("类型");
 	});
 
+	// DungeonData
+	load_excel<exceloutput::DungeonData>("resources/exceloutput/DungeonData.tsv", &exceloutput::dungeon_datas, "ID", [](exceloutput::DungeonData *dungeon, const Excel *excel) {
+		dungeon->scene_id = excel->get_int("场景ID");
+		dungeon->daily_limit = excel->get_int("每天准入次数");
+	});
+
 	// scene configs
 	if (!std::filesystem::exists("resources/binoutput/Scene/Point")) {
 		soggy_log("error!!!: resources/binoutput/Scene/Point does not exist");
@@ -317,6 +344,18 @@ bool load_game_data() {
 				ifs >> json;
 
 				binoutput::scene_points.emplace(sceneid, json); // calls ConfigScene ctor and from_json
+			}
+		}
+
+		for (auto &it : binoutput::scene_points) {
+			binoutput::ConfigScene *scene = &it.second;
+			for (auto &it : scene->points) {
+				int exit_pointid = it.first;
+				binoutput::ConfigScenePoint *exit_point = &it.second;
+				if (exit_point->$type == "DungeonExit") {
+					binoutput::ConfigScenePoint *entry_point = &scene->points.at(exit_point->dungeon_entry_point_id);
+					entry_point->dungeon_exit_point_id = exit_pointid;
+				}
 			}
 		}
 	}
@@ -418,10 +457,11 @@ bool load_scene_script_data(int sceneid) {
 	luares::SceneConfig *scene_config = &luares::scene_configs[sceneid];
 
 	// scene_config
-	lua_getglobal(L, "scene_config");
+	if (lua_getglobal(L, "scene_config") == LUA_TTABLE) {
 		soglua_get_vec3f(L, "born_pos", &scene_config->born_pos);
 		soglua_get_vec3f(L, "born_rot", &scene_config->born_rot);
 		soglua_get_float(L, "die_y", &scene_config->die_y);
+	}
 	lua_pop(L, 1);
 
 	// blocks
