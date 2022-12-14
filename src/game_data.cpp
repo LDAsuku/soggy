@@ -13,8 +13,11 @@
 #include <unordered_map>
 #include <regex>
 
-// nlohmann json
-#include <nlohmann/json.hpp>
+// rapidjson
+#define RAPIDJSON_HAS_STDSTRING 1
+#define RAPIDJSON_NOMEMBERITERATORCLASS 1
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
 
 // lua
 extern "C" {
@@ -49,13 +52,13 @@ namespace exceloutput {
 	std::unordered_map<std::string, std::string> text_map;
 }
 
-void from_json(const nlohmann::json &json, Vec3f &);
+//void from_json(const nlohmann::json &json, Vec3f &);
 
 namespace binoutput {
 	std::unordered_map<int, ConfigScene> scene_points;
 
-	void from_json(const nlohmann::json &json, ConfigScene &);
-	void from_json(const nlohmann::json &json, ConfigScenePoint &);
+	//void from_json(const nlohmann::json &json, ConfigScene &);
+	//void from_json(const nlohmann::json &json, ConfigScenePoint &);
 }
 
 namespace luares {
@@ -136,52 +139,69 @@ std::vector<int> Excel::get_ints(const std::string key) const {
 // binoutput json stuff
 //
 
-void from_json(const nlohmann::json &json, Vec3f &vec) {
-	vec.x = json.value("x", 0.0f);
-	vec.y = json.value("y", 0.0f);
-	vec.z = json.value("z", 0.0f);
+void json_read_vec3f(Vec3f *vec3f, const rapidjson::Value &json) {
+	const rapidjson::Value::ConstMemberIterator &json_x = json.FindMember("x");
+	if (json_x != json.MemberEnd() && json_x->value.IsNumber()) {
+		vec3f->x = json_x->value.GetFloat();
+	}
+	const rapidjson::Value::ConstMemberIterator &json_y = json.FindMember("y");
+	if (json_y != json.MemberEnd() && json_y->value.IsNumber()) {
+		vec3f->y = json_y->value.GetFloat();
+	}
+	const rapidjson::Value::ConstMemberIterator &json_z = json.FindMember("z");
+	if (json_z != json.MemberEnd() && json_z->value.IsNumber()) {
+		vec3f->z = json_z->value.GetFloat();
+	}
 }
-void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScenePoint &configscenepoint) {
-	json.at("$type").get_to(configscenepoint.$type);
 
-	nlohmann::json::const_iterator json_pos = json.find("pos");
-	if (json_pos != json.end() && json_pos->is_object()) {
-		json_pos->get_to(configscenepoint.pos);
+void json_read_config_scene_point(binoutput::ConfigScenePoint *configscenepoint, const rapidjson::Value &json) {
+	const rapidjson::Value::ConstMemberIterator &json_type = json.FindMember("$type");
+	if (json_type != json.MemberEnd() && json_type->value.IsString()) {
+		configscenepoint->$type.assign(json_type->value.GetString());
 	}
-	nlohmann::json::const_iterator json_rot = json.find("rot");
-	if (json_rot != json.end() && json_rot->is_object()) {
-		json_rot->get_to(configscenepoint.rot);
+	const rapidjson::Value::ConstMemberIterator &json_pos = json.FindMember("pos");
+	if (json_pos != json.MemberEnd() && json_pos->value.IsObject()) {
+		json_read_vec3f(&configscenepoint->pos, json_pos->value);
 	}
-	nlohmann::json::const_iterator json_tranpos = json.find("tranPos");
-	if (json_tranpos != json.end() && json_tranpos->is_object()) {
-		json_tranpos->get_to(configscenepoint.tranpos);
+	const rapidjson::Value::ConstMemberIterator &json_rot = json.FindMember("rot");
+	if (json_rot != json.MemberEnd() && json_rot->value.IsObject()) {
+		json_read_vec3f(&configscenepoint->rot, json_rot->value);
 	}
-	nlohmann::json::const_iterator json_tranrot = json.find("tranRot");
-	if (json_tranrot != json.end() && json_tranrot->is_object()) {
-		json_tranrot->get_to(configscenepoint.tranrot);
+	const rapidjson::Value::ConstMemberIterator &json_tranpos = json.FindMember("tranPos");
+	if (json_tranpos != json.MemberEnd() && json_tranpos->value.IsObject()) {
+		json_read_vec3f(&configscenepoint->tranpos, json_tranpos->value);
 	}
-	nlohmann::json::const_iterator json_transceneid = json.find("tranSceneId");
-	if (json_transceneid != json.end() && json_transceneid->is_number_integer()) {
-		json_transceneid->get_to(configscenepoint.transceneid);
+	const rapidjson::Value::ConstMemberIterator &json_tranrot = json.FindMember("tranRot");
+	if (json_tranrot != json.MemberEnd() && json_tranrot->value.IsObject()) {
+		json_read_vec3f(&configscenepoint->tranrot, json_tranrot->value);
 	}
-	nlohmann::json::const_iterator json_dungeonids = json.find("dungeonIds");
-	if (json_dungeonids != json.end() && json_dungeonids->is_array()) {
-		for (const auto &dungeon_id : *json_dungeonids) {
-			if (dungeon_id.is_number_integer()) {
-				dungeon_id.get_to(configscenepoint.dungeon_ids.emplace_back());
+	const rapidjson::Value::ConstMemberIterator &json_transceneid = json.FindMember("tranSceneId");
+	if (json_transceneid != json.MemberEnd() && json_transceneid->value.IsInt()) {
+		configscenepoint->transceneid = json_transceneid->value.GetInt();
+	}
+	const rapidjson::Value::ConstMemberIterator &json_dungeonids = json.FindMember("dungeonIds");
+	if (json_dungeonids != json.MemberEnd() && json_dungeonids->value.IsArray()) {
+		for (const rapidjson::Value &e : json_dungeonids->value.GetArray()) {
+			if (e.IsInt()) {
+				configscenepoint->dungeon_ids.push_back(e.GetInt());
 			}
 		}
 	}
-	nlohmann::json::const_iterator json_entrypointid = json.find("entryPointId");
-	if (json_entrypointid != json.end() && json_entrypointid->is_number_integer()) {
-		json_entrypointid->get_to(configscenepoint.dungeon_entry_point_id);
+	const rapidjson::Value::ConstMemberIterator &json_entrypointid = json.FindMember("entryPointId");
+	if (json_entrypointid != json.MemberEnd() && json_entrypointid->value.IsInt()) {
+		configscenepoint->dungeon_entry_point_id = json_entrypointid->value.GetInt();
 	}
 }
-void binoutput::from_json(const nlohmann::json &json, binoutput::ConfigScene &configscene) {
-	nlohmann::json::const_iterator json_points = json.find("points");
-	if (json_points != json.end() && json_points->is_object()) {
-		for (nlohmann::json::const_iterator it = json_points->cbegin(); it != json_points->cend(); it++) {
-			configscene.points.emplace(std::stoi(it.key()), it.value());
+
+void json_read_config_scene(binoutput::ConfigScene *configscene, const rapidjson::Document &json) {
+	const rapidjson::Value::ConstMemberIterator json_points = json.FindMember("points");
+	if (json_points != json.MemberEnd()) {
+		for (rapidjson::Value::ConstMemberIterator it = json_points->value.MemberBegin(); it != json_points->value.MemberEnd(); ++it) {
+			if (it->value.IsObject()) {
+				int pointid = std::stoi(it->name.GetString());
+				binoutput::ConfigScenePoint *configscenepoint = &configscene->points.insert({ pointid, binoutput::ConfigScenePoint() }).first->second;
+				json_read_config_scene_point(configscenepoint, it->value);
+			}
 		}
 	}
 }
@@ -330,7 +350,7 @@ bool load_game_data() {
 		soggy_log("error!!!: resources/binoutput/Scene/Point does not exist");
 		error = true;
 	} else {
-		std::regex re_scene_points(R"(^scene(\d+)_point\.json$)");
+		static const std::regex re_scene_points(R"(^scene(\d+)_point\.json$)");
 		for (const std::filesystem::directory_entry &dirent : std::filesystem::directory_iterator("resources/binoutput/Scene/Point")) {
 			std::filesystem::path path = dirent.path();
 			std::smatch m;
@@ -339,11 +359,15 @@ bool load_game_data() {
 				std::string s = m[1].str();
 				int sceneid = std::stoi(s);
 
-				std::ifstream ifs(path);
-				nlohmann::json json;
-				ifs >> json;
+				rapidjson::Document json;
+				{
+					std::ifstream ifs(path);
+					rapidjson::IStreamWrapper isw(ifs);
+					json.ParseStream(isw);
+				}
 
-				binoutput::scene_points.emplace(sceneid, json); // calls ConfigScene ctor and from_json
+				binoutput::ConfigScene *configscene = &binoutput::scene_points.insert({ sceneid, binoutput::ConfigScene() }).first->second;
+				json_read_config_scene(configscene, json);
 			}
 		}
 

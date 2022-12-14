@@ -1,10 +1,8 @@
-If you're going to chase clout on twitter by posting "leaks" with this, PLEASE credit the project.
-
 # Soggy
 
 Experimental server emulator for a game I forgot its name 💀
 
-![soggy cat](soggy_cat.png "soggy cat")
+![soggy cat](static/soggy_cat.png "soggy cat")
 
 [Setup & Documentation](https://nitter.pussthecat.org/sillysoggycat/)
 
@@ -49,7 +47,9 @@ cmake --build build -j8
 
 ## Running
 
-Put the `resources` directory in the current working directory and run. Enter `help` in the interactive prompt to see a list of commands.
+Put the `resources` directory and `soggy.cfg` in the current working directory and run soggy. Enter `help` in the interactive prompt to see a list of commands.
+
+`dispatch.py` is obsolete. The game server has a built-in dispatch server now.
 
 Resources can be found on the repo wiki.
 

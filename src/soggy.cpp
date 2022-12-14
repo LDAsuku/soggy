@@ -6,8 +6,10 @@
 #include <cassert>
 #include <csignal>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <math.h>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -17,6 +19,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <optional>
+#include <variant>
 #ifdef _WIN32
 #include <io.h>
 #endif
@@ -31,6 +34,9 @@
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/util/json_util.h>
+
+// inih
+#include <ini.h>
 
 // protos
 #include "proto/AvatarSkillDepotChangeNotify.pb.h"
@@ -126,6 +132,8 @@
 #include "packet.hpp"
 #include "log.hpp"
 #include "vec.hpp"
+#include "dispatch.hpp"
+#include "configfile.hpp"
 
 const char *const HISTORY_FILE_NAME = ".soggy_history";
 
@@ -142,6 +150,7 @@ const float GROUP_LOAD_DISTANCE = 100.0f;
 const float GROUP_UNLOAD_DISTANCE = 120.0f;
 
 int get_next_guid() {
+	// this would be saved to disk
 	static std::atomic_int guid = 0;
 	return ++guid;
 }
@@ -160,7 +169,7 @@ int make_entity_id(RuntimeIDCategory cat, int peer_id, int sequence) {
 		((sequence << RuntimeIDBits::RUNTIME_ID_SEQUENCE_SHIFT) & RuntimeIDBits::RUNTIME_ID_SEQUENCE_MASK);
 }
 
-int get_next_entity_id(RuntimeIDCategory cat) {
+int get_next_runtime_entity_id(RuntimeIDCategory cat) {
 	static std::atomic_int seq[21];
 	assert(is_valid_runtime_id_category(cat));
 	return make_entity_id(cat, PLAYER_PEER_ID, ++seq[cat]);
@@ -208,33 +217,47 @@ struct YSPlayerItem {
 	void make_item_proto(Item *item) const;
 };
 
-struct YSEntity {
-	// runtime state
-	int runtime_entity_id;
-	ProtEntityType entity_type;
-	bool alive = true;
-	Vec3f pos;
-	Vec3f rot;
-	int belong_group_id = 0;
-	struct {
+struct YSRuntimeEntity {
+	struct None {};
+	struct Gadget {
 		int config_id = 0;
 		int gadget_id = 0;
 		GadgetState gadget_state = GadgetState::GADGET_STATE_Default;
 		int route_id = 0;
-	} gadget;
-	struct {
+
+		const exceloutput::GadgetData *get_excel() const;
+	};
+	struct Monster {
 		int config_id = 0;
 		int monster_id = 0;
 		std::vector<int> weapon_gadget_ids;
-	} monster;
-	struct {
+
+		const exceloutput::MonsterData *get_excel() const;
+	};
+	struct Npc {
 		int npc_id = 0;
-	} npc;
-	// don't modify these outside of flush_entities
+
+		const exceloutput::NpcData *get_excel() const;
+	};
+
+	int runtime_entity_id = 0;
+	ProtEntityType entity_type = ProtEntityType::PROT_ENTITY_NONE;
+	bool alive = true;
+	Vec3f pos;
+	Vec3f rot;
+	int belong_group_id = 0;
+	// don't modify this outside of flush_entities
 	bool has_sent_appear = false;
-	bool has_sent_disappear = false;
+
+	std::variant<None, Gadget, Monster, Npc> var = None();
 
 	// methods
+	inline Gadget *gadget() { return &std::get<Gadget>(this->var); }
+	inline Monster *monster() { return &std::get<Monster>(this->var); }
+	inline Npc *npc() { return &std::get<Npc>(this->var); }
+	inline const Gadget *gadget() const { return &std::get<Gadget>(this->var); }
+	inline const Monster *monster() const { return &std::get<Monster>(this->var); }
+	inline const Npc *npc() const { return &std::get<Npc>(this->var); }
 	void make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) const;
 };
 
@@ -277,20 +300,37 @@ struct YSLocation {
 	MotionState motionstate = MotionState::MOTION_NONE;
 };
 
+enum class SceneLoadState {
+	// when the scene is done loading:
+	// - any entity packets can be sent
+	// - SceneEntityMoveReq may be recorded
+	DONE,
+	// when a new scene is loading:
+	// - don't send any entity packets
+	// - ignore SceneEntityMoveReq
+	LOADING_NEW_SCENE,
+	// when the same scene is loading:
+	// - send entity disappear packets, don't send entity appear packets
+	// - ignore SceneEntityMoveReq
+	LOADING_SAME_SCENE
+};
+
 // scene related stuff may be moved to its own struct
 struct YSPlayer {
 	// runtime state
 	YSConnection *conn;
-	bool current_scene_is_done = false; // set to false when beginning switching scenes or when initially loading, set to true after receiving EnterSceneDoneReq
+	SceneLoadState current_scene_load_state;
 	bool has_sent_avatardatanotify = false;
 	YSLocation current_location;
 	YSLocation safe_location;
 	YSLocation return_location;
-	std::unordered_map<int, YSEntity> scene_entities;
+	std::unordered_map<int, YSRuntimeEntity> scene_entities;
 	int team_entity_id = 0;
 	std::unordered_set<int> loaded_groups;
 
 	// persist data
+	//int uid = 0;
+	//std::string name;
 	std::unordered_map<int, YSAvatar> avatars;
 	std::unordered_map<int, int> equips_ref; // redundant; item guid -> avatar guid
 	std::unordered_map<int, int> avatars_by_id_ref; // redundant; avatar id -> avatar guid
@@ -306,9 +346,9 @@ struct YSPlayer {
 	YSAvatar *add_avatar(int avatar_id);
 	void remove_avatar(int guid);
 	YSPlayerItem *add_item(int item_id);
-	YSEntity *scene_spawn_gadget(int gadget_id);
-	YSEntity *scene_spawn_monster(int monster_id);
-	YSEntity *scene_spawn_npc(int npc_id);
+	YSRuntimeEntity *scene_spawn_gadget(int gadget_id);
+	YSRuntimeEntity *scene_spawn_monster(int monster_id);
+	YSRuntimeEntity *scene_spawn_npc(int npc_id);
 	void scene_despawn_entity(int entity_id);
 	void switch_avatar(int guid);
 	void make_player_enter_scene_notify_proto(PlayerEnterSceneNotify *playerenterscenenotify, EnterType entertype, int prev_sceneid);
@@ -438,7 +478,7 @@ void YSPlayer::enter_scene(int sceneid, Vec3f pos, Vec3f rot) {
 	if (this->current_location.sceneid != prev_sceneid) {
 		// entering a different scene
 		entertype = EnterType::ENTER_JUMP;
-		this->current_scene_is_done = false; // suspend until the client finishes loading the new scene
+		this->current_scene_load_state = SceneLoadState::LOADING_NEW_SCENE;
 
 		load_scene_script_data(sceneid);
 		this->loaded_groups.clear();
@@ -446,6 +486,7 @@ void YSPlayer::enter_scene(int sceneid, Vec3f pos, Vec3f rot) {
 	} else {
 		// same scene
 		entertype = EnterType::ENTER_GOTO;
+		this->current_scene_load_state = SceneLoadState::LOADING_SAME_SCENE;
 	}
 
 	this->changed_position();
@@ -525,29 +566,31 @@ void YSPlayer::scene_load_group(const luares::SceneGroup *group) {
 	for (const auto &it : group->gadgets) {
 		const luares::SceneEntity *gadget = &it;
 
-		YSEntity *entity = this->scene_spawn_gadget(gadget->gadget.gadget_id);
+		YSRuntimeEntity *entity = this->scene_spawn_gadget(gadget->gadget.gadget_id);
 		entity->belong_group_id = group->id;
 		entity->pos = gadget->pos;
 		entity->rot = gadget->rot;
-		entity->gadget.config_id = gadget->config_id;
-		entity->gadget.gadget_state = gadget->gadget.state;
-		entity->gadget.route_id = gadget->gadget.route_id;
+		YSRuntimeEntity::Gadget *entity_gadget = entity->gadget();
+		entity_gadget->config_id = gadget->config_id;
+		entity_gadget->gadget_state = gadget->gadget.state;
+		entity_gadget->route_id = gadget->gadget.route_id;
 	}
 
 	for (const auto &it : group->monsters) {
 		const luares::SceneEntity *monster = &it;
 
-		YSEntity *entity = this->scene_spawn_monster(monster->monster.monster_id);
+		YSRuntimeEntity *entity = this->scene_spawn_monster(monster->monster.monster_id);
 		entity->belong_group_id = group->id;
 		entity->pos = monster->pos;
 		entity->rot = monster->rot;
-		entity->monster.config_id = monster->config_id;
+		YSRuntimeEntity::Monster *entity_monster = entity->monster();
+		entity_monster->config_id = monster->config_id;
 	}
 
 	for (const auto &it : group->npcs) {
 		const luares::SceneEntity *npc = &it;
 
-		YSEntity *entity = this->scene_spawn_npc(npc->npc.npc_id);
+		YSRuntimeEntity *entity = this->scene_spawn_npc(npc->npc.npc_id);
 		entity->belong_group_id = group->id;
 		entity->pos = npc->pos;
 		entity->rot = npc->rot;
@@ -557,7 +600,7 @@ void YSPlayer::scene_load_group(const luares::SceneGroup *group) {
 void YSPlayer::scene_unload_group(const luares::SceneGroup *group) {
 	soggy_log("unloading group id %d", group->id);
 	for (auto &it : this->scene_entities) {
-		const YSEntity *entity = &it.second;
+		const YSRuntimeEntity *entity = &it.second;
 		if (entity->belong_group_id == group->id) {
 			this->scene_despawn_entity(entity->runtime_entity_id);
 		}
@@ -565,7 +608,7 @@ void YSPlayer::scene_unload_group(const luares::SceneGroup *group) {
 }
 
 void YSPlayer::scene_flush_entities() {
-	if (!this->current_scene_is_done) {
+	if (this->current_scene_load_state == SceneLoadState::LOADING_NEW_SCENE) {
 		return;
 	}
 
@@ -574,22 +617,21 @@ void YSPlayer::scene_flush_entities() {
 
 	for (auto it = this->scene_entities.begin(); it != this->scene_entities.end();) {
 		int entity_id = it->first;
-		YSEntity *entity = &it->second;
+		YSRuntimeEntity *entity = &it->second;
 
 		if (entity->alive) {
-			if (!entity->has_sent_appear) {
+			if (this->current_scene_load_state == SceneLoadState::DONE && !entity->has_sent_appear) {
 				// send appear
 				entity->make_scene_entity_info_proto(appearnotify.add_entitylist());
 				entity->has_sent_appear = true;
 			}
 		} else {
-			if (!entity->has_sent_disappear) {
-				// send disappear and delete
+			// send disappear and delete
+			if (entity->has_sent_appear) {
 				disappearnotify.add_entitylist(entity_id);
-				entity->has_sent_disappear = true;
-				it = this->scene_entities.erase(it);
-				continue;
 			}
+			it = this->scene_entities.erase(it);
+			continue;
 		}
 		it++;
 	}
@@ -647,10 +689,10 @@ void YSPlayerItem::make_item_proto(Item *item) const {
 }
 
 //
-// YSEntity
+// YSRuntimeEntity
 //
 
-void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) const {
+void YSRuntimeEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) const {
 	sceneentityinfo->set_entitytype(this->entity_type);
 	sceneentityinfo->set_entityid(this->runtime_entity_id);
 	pb_make_vector(sceneentityinfo->mutable_motioninfo()->mutable_pos(), &this->pos);
@@ -659,12 +701,13 @@ void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) co
 	sceneentityinfo->mutable_abilityinfo()->set_isinited(false);
 	switch (this->entity_type) {
 		case ProtEntityType::PROT_ENTITY_GADGET: {
-			const exceloutput::GadgetData *excel_gadget = &exceloutput::gadget_datas.at(this->gadget.gadget_id);
+			const YSRuntimeEntity::Gadget *entity_gadget = this->gadget();
+			const exceloutput::GadgetData *excel_gadget = entity_gadget->get_excel();
 
 			SceneGadgetInfo *gadgetinfo = sceneentityinfo->mutable_gadget();
-			gadgetinfo->set_configid(this->gadget.config_id);
-			gadgetinfo->set_gadgetid(this->gadget.gadget_id);
-			gadgetinfo->set_gadgetstate(this->gadget.gadget_state);
+			gadgetinfo->set_configid(entity_gadget->config_id);
+			gadgetinfo->set_gadgetid(entity_gadget->gadget_id);
+			gadgetinfo->set_gadgetstate(entity_gadget->gadget_state);
 			gadgetinfo->set_isenableinteract(true);
 			gadgetinfo->set_authoritypeerid(PLAYER_PEER_ID);
 			switch (excel_gadget->entity_type) {
@@ -673,7 +716,7 @@ void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) co
 					break;
 				}
 				case EntityType::ENTITY_Platform: {
-					gadgetinfo->mutable_platform()->set_routeid(this->gadget.route_id);
+					gadgetinfo->mutable_platform()->set_routeid(entity_gadget->route_id);
 					gadgetinfo->mutable_platform()->set_isstarted(true);
 					break;
 				}
@@ -683,11 +726,13 @@ void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) co
 			break;
 		}
 		case ProtEntityType::PROT_ENTITY_MONSTER: {
+			const YSRuntimeEntity::Monster *entity_monster = this->monster();
+
 			SceneMonsterInfo *monsterinfo = sceneentityinfo->mutable_monster();
-			monsterinfo->set_configid(this->monster.config_id);
-			monsterinfo->set_monsterid(this->monster.monster_id);
+			monsterinfo->set_configid(entity_monster->config_id);
+			monsterinfo->set_monsterid(entity_monster->monster_id);
 			monsterinfo->set_authoritypeerid(PLAYER_PEER_ID);
-			for (int gadget_id : this->monster.weapon_gadget_ids) {
+			for (int gadget_id : entity_monster->weapon_gadget_ids) {
 				// these don't seem to need an entity id (yet)
 				SceneWeaponInfo *weaponinfo = monsterinfo->add_weaponlist();
 				weaponinfo->set_gadgetid(gadget_id);
@@ -696,13 +741,25 @@ void YSEntity::make_scene_entity_info_proto(SceneEntityInfo *sceneentityinfo) co
 			break;
 		}
 		case ProtEntityType::PROT_ENTITY_NPC: {
+			const YSRuntimeEntity::Npc *entity_npc = this->npc();
+
 			SceneNpcInfo *npcinfo = sceneentityinfo->mutable_npc();
-			npcinfo->set_npcid(this->npc.npc_id);
+			npcinfo->set_npcid(entity_npc->npc_id);
 			break;
 		}
 		default:
 			break;
 	}
+}
+
+const exceloutput::GadgetData *YSRuntimeEntity::Gadget::get_excel() const {
+	return &exceloutput::gadget_datas.at(this->gadget_id);
+}
+const exceloutput::MonsterData *YSRuntimeEntity::Monster::get_excel() const {
+	return &exceloutput::monster_datas.at(this->monster_id);
+}
+const exceloutput::NpcData *YSRuntimeEntity::Npc::get_excel() const {
+	return &exceloutput::npc_datas.at(this->npc_id);
 }
 
 //
@@ -933,9 +990,9 @@ YSAvatar *YSPlayer::add_avatar(int avatar_id) {
 	avatar->owning_player = this;
 	avatar->avatar_id = avatar_id;
 	avatar->avatar_guid = avatar_guid;
-	avatar->avatar_entity_id = get_next_entity_id(RuntimeIDCategory::AVATAR_CATE);
+	avatar->avatar_entity_id = get_next_runtime_entity_id(RuntimeIDCategory::AVATAR_CATE);
 	avatar->weapon_guid = initial_weapon->guid;
-	avatar->weapon_entity_id = get_next_entity_id(RuntimeIDCategory::GADGET_CATE);
+	avatar->weapon_entity_id = get_next_runtime_entity_id(RuntimeIDCategory::GADGET_CATE);
 	avatar->reliquary_bracer_guid = 0;
 	avatar->reliquary_dress_guid = 0;
 	avatar->reliquary_shoes_guid = 0;
@@ -963,54 +1020,57 @@ YSAvatar *YSPlayer::add_avatar(int avatar_id) {
 
 void YSPlayer::remove_avatar(int avatar_guid) {
 	// future
+	// send AvatarDelNotify
 }
 
-YSEntity *YSPlayer::scene_spawn_gadget(int gadget_id) {
-	int entity_id = get_next_entity_id(RuntimeIDCategory::GADGET_CATE);
+YSRuntimeEntity *YSPlayer::scene_spawn_gadget(int gadget_id) {
+	int entity_id = get_next_runtime_entity_id(RuntimeIDCategory::GADGET_CATE);
 
-	//const exceloutput::GadgetData *excel_gadget = &exceloutput::gadget_datas.at(gadget_id);
+	YSRuntimeEntity *entity = &this->scene_entities[entity_id];
 
-	YSEntity *entity = &this->scene_entities[entity_id];
 	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_GADGET;
-	entity->gadget.gadget_id = gadget_id;
+	YSRuntimeEntity::Gadget *entity_gadget = &entity->var.emplace<YSRuntimeEntity::Gadget>(YSRuntimeEntity::Gadget());
+	entity_gadget->gadget_id = gadget_id;
+
 	return entity;
 }
 
-YSEntity *YSPlayer::scene_spawn_monster(int monster_id) {
-	int entity_id = get_next_entity_id(RuntimeIDCategory::MONSTER_CATE);
+YSRuntimeEntity *YSPlayer::scene_spawn_monster(int monster_id) {
+	int entity_id = get_next_runtime_entity_id(RuntimeIDCategory::MONSTER_CATE);
 
-	const exceloutput::MonsterData *excel_monster = &exceloutput::monster_datas.at(monster_id);
-
-	YSEntity *entity = &this->scene_entities[entity_id];
+	YSRuntimeEntity *entity = &this->scene_entities[entity_id];
 	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_MONSTER;
-	entity->monster.monster_id = monster_id;
+	YSRuntimeEntity::Monster *entity_monster = &entity->var.emplace<YSRuntimeEntity::Monster>(YSRuntimeEntity::Monster());
+	entity_monster->monster_id = monster_id;
+
+	const exceloutput::MonsterData *excel_monster = entity_monster->get_excel();
 
 	if (excel_monster->equip_1 != 0) {
-		entity->monster.weapon_gadget_ids.push_back(excel_monster->equip_1);
+		entity_monster->weapon_gadget_ids.push_back(excel_monster->equip_1);
 	}
 	if (excel_monster->equip_2 != 0) {
-		entity->monster.weapon_gadget_ids.push_back(excel_monster->equip_2);
+		entity_monster->weapon_gadget_ids.push_back(excel_monster->equip_2);
 	}
 
 	return entity;
 }
 
-YSEntity *YSPlayer::scene_spawn_npc(int npc_id) {
-	int entity_id = get_next_entity_id(RuntimeIDCategory::NPC_CATE);
+YSRuntimeEntity *YSPlayer::scene_spawn_npc(int npc_id) {
+	int entity_id = get_next_runtime_entity_id(RuntimeIDCategory::NPC_CATE);
 
-	//const exceloutput::NpcData *excel_npc = &exceloutput::npc_datas.at(npc_id);
-
-	YSEntity *entity = &this->scene_entities[entity_id];
+	YSRuntimeEntity *entity = &this->scene_entities[entity_id];
 	entity->runtime_entity_id = entity_id;
 	entity->entity_type = ProtEntityType::PROT_ENTITY_NPC;
-	entity->npc.npc_id = npc_id;
+	YSRuntimeEntity::Npc *entity_npc = &entity->var.emplace<YSRuntimeEntity::Npc>(YSRuntimeEntity::Npc());
+	entity_npc->npc_id = npc_id;
+
 	return entity;
 }
 
 void YSPlayer::scene_despawn_entity(int entity_id) {
-	YSEntity *entity = &this->scene_entities.at(entity_id);
+	YSRuntimeEntity *entity = &this->scene_entities.at(entity_id);
 	entity->alive = false;
 }
 
@@ -1019,7 +1079,7 @@ YSPlayer mainplayer;
 YSConnection mainconn;
 
 void init_mainplayer() {
-	mainplayer.team_entity_id = get_next_entity_id(RuntimeIDCategory::MANAGER_CATE);
+	mainplayer.team_entity_id = get_next_runtime_entity_id(RuntimeIDCategory::MANAGER_CATE);
 
 	// give a bunch of avatars
 	for (const auto &it : exceloutput::avatar_datas) {
@@ -1075,7 +1135,7 @@ void handle_GetPlayerTokenReq(YSConnection *conn, const GetPlayerTokenReq *getpl
 }
 
 void handle_PlayerLoginReq(YSConnection *conn, const PlayerLoginReq *playerloginreq) {
-	conn->player->current_scene_is_done = false;
+	conn->player->current_scene_load_state = SceneLoadState::LOADING_NEW_SCENE;
 
 	PlayerDataNotify playerdatanotify;
 	playerdatanotify.set_nickname(PLAYER_NAME);
@@ -1177,10 +1237,8 @@ void handle_PlayerLoginReq(YSConnection *conn, const PlayerLoginReq *playerlogin
 	PlayerLoginRsp playerloginrsp;
 	playerloginrsp.set_retcode(Retcode::RET_SUCC);
 	playerloginrsp.set_targetuid(PLAYER_UID);
-	playerloginrsp.set_isnewplayer(false); // ?
-	playerloginrsp.set_dataversion(138541); // ?
-	playerloginrsp.set_resversion(138541); // ?
-	playerloginrsp.set_isrelogin(false); // ?
+	playerloginrsp.set_dataversion(soggy_cfg.common_design_data_version);
+	playerloginrsp.set_resversion(soggy_cfg.common_game_res_version);
 	conn->send_packet(&playerloginrsp);
 }
 
@@ -1295,7 +1353,7 @@ void handle_EnterSceneDoneReq(YSConnection *conn, const EnterSceneDoneReq *enter
 	pb_make_vector(playerlocationinfo->mutable_rot(), &conn->player->current_location.rot);
 	conn->send_packet(&sceneplayerlocationnotify);
 
-	conn->player->current_scene_is_done = true;
+	conn->player->current_scene_load_state = SceneLoadState::DONE;
 	conn->player->scene_flush_entities();
 
 	EnterSceneDoneRsp enterscenedonersp;
@@ -1310,8 +1368,10 @@ void handle_PlayerSetPauseReq(YSConnection *conn, const PlayerSetPauseReq *playe
 }
 
 void handle_SceneEntityMoveReq(YSConnection *conn, const SceneEntityMoveReq *sceneentitymovereq) {
-	// the client sends this packet with MOTION_LAND_SPEED and position zero sometimes. don't record it.
-	if (sceneentitymovereq->motioninfo().state() == MotionState::MOTION_LAND_SPEED) {
+	// the client sends this packet with position zero sometimes. don't record it.
+	// possibly todo?: figure out all conditions this occurs in
+	const Vector *pos = &sceneentitymovereq->motioninfo().pos();
+	if (pos->x() == 0.0f && pos->y() == 0.0f && pos->z() == 0.0f) {
 		return;
 	}
 
@@ -1320,9 +1380,9 @@ void handle_SceneEntityMoveReq(YSConnection *conn, const SceneEntityMoveReq *sce
 	// in the future this would use the received entityId to determine whether to record movement.
 	// all scene entities would be despawned as soon as a transpoint is used, so the entity id in this packet would be invalid.
 	// for now, just ignore it if the scene isn't done loading.
-	if (conn->player->current_scene_is_done) {
+	if (conn->player->current_scene_load_state == SceneLoadState::DONE) {
 		if (sceneentitymovereq->entityid() == avatar_entity_id) {
-			conn->player->current_location.pos = pb_convert_vector(&sceneentitymovereq->motioninfo().pos());
+			conn->player->current_location.pos = pb_convert_vector(pos);
 			conn->player->current_location.rot = pb_convert_vector(&sceneentitymovereq->motioninfo().rot());
 			conn->player->current_location.motionstate = sceneentitymovereq->motioninfo().state();
 			conn->player->changed_position();
@@ -1602,16 +1662,11 @@ void handle_ChangeGameTimeReq(YSConnection *conn, const ChangeGameTimeReq *chang
 }
 
 
-ENetHost *host = NULL;
+bool queued_shutdown = false;
 
-bool go = true;
-
-void exit_handler() {
-	if (host != NULL) {
-		enet_host_destroy(host);
-		host = NULL;
-	}
-	enet_deinitialize();
+void soggy_shutdown() {
+	interrupt_dispatch_server();
+	queued_shutdown = true;
 }
 
 void print_socket_error(const char *str) {
@@ -1626,10 +1681,26 @@ void print_socket_error(const char *str) {
 
 void game_server_main() {
 	// future: for multiple connections
-	//std::map<ENetPeer *, YSConnection> connections;
+	//std::map<int, YSConnection> connections;
+
+	enet_initialize();
+
+	ENetAddress addr;
+	enet_address_set_host(&addr, soggy_cfg.game_bind_addr.c_str());
+	addr.port = soggy_cfg.game_bind_port;
+
+	ENetHost *host = enet_host_create(&addr, /*peerCount*/ soggy_cfg.game_max_clients, /*channelLimit*/ 0, /*incomingBandwidth*/ 0, /*outgoingBandwidth*/ 0);
+	if (host == NULL) {
+		print_socket_error("enet_create_host");
+		exit(1);
+	}
+	enet_host_compress_with_range_coder(host);
+	host->checksum = enet_crc32;
+
+	soggy_log("game listening on port %d", addr.port);
 
 	ENetEvent ev;
-	while (go) {
+	while (!queued_shutdown) {
 		int ret = enet_host_service(host, &ev, 20); // setting this timeout to 0 blasts the cpu
 		if (ret < 0) {
 			print_socket_error("enet_host_service");
@@ -1641,7 +1712,6 @@ void game_server_main() {
 
 		switch (ev.type) {
 			case ENET_EVENT_TYPE_CONNECT: {
-				//conn->login_step = LoginStep::WAIT_FOR_TOKEN_REQ;
 				conn->player = &mainplayer;
 				conn->player->conn = conn;
 				conn->peer = ev.peer;
@@ -1649,7 +1719,6 @@ void game_server_main() {
 				break;
 			}
 			case ENET_EVENT_TYPE_DISCONNECT: {
-				//conn->login_step = LoginStep::NONE;
 				conn->player = NULL;
 				conn->peer = NULL;
 				soggy_log("\x1b[97mEVENT_TYPE_DISCONNECT\x1b[0m");
@@ -1726,6 +1795,9 @@ void game_server_main() {
 				break;
 		}
 	}
+
+	enet_host_destroy(host);
+	enet_deinitialize();
 }
 
 typedef void (*soggy_rlcmd_proc_with_target)(YSConnection *target, std::string label, std::vector<std::string> args);
@@ -1880,7 +1952,7 @@ void cmd_help(std::string label, std::vector<std::string> args) {
 }
 
 void cmd_stop(std::string label, std::vector<std::string> args) {
-	go = false;
+	soggy_shutdown();
 }
 
 void cmd_elfie(YSConnection *target, std::string label, std::vector<std::string> args) {
@@ -1889,7 +1961,7 @@ void cmd_elfie(YSConnection *target, std::string label, std::vector<std::string>
 
 	SceneEntityInfo *entityinfo = appear.add_entitylist();
 	entityinfo->set_entitytype(ProtEntityType::PROT_ENTITY_NPC);
-	entityinfo->set_entityid(get_next_entity_id(RuntimeIDCategory::NPC_CATE));
+	entityinfo->set_entityid(get_next_runtime_entity_id(RuntimeIDCategory::NPC_CATE));
 	pb_make_vector(entityinfo->mutable_motioninfo()->mutable_pos(), &target->player->current_location.pos);
 	entityinfo->mutable_motioninfo()->mutable_rot();
 	entityinfo->mutable_motioninfo()->mutable_speed();
@@ -1948,11 +2020,13 @@ void cmd_switchelement(YSConnection *target, std::string label, std::vector<std:
 }
 
 void cmd_pos(YSConnection *target, std::string label, std::vector<std::string> args) {
-	if (!target->player->current_scene_is_done) {
-		soggy_log("sceneid=%d (not done)", target->player->current_location.sceneid);
-	} else {
-		soggy_log("sceneid=%d", target->player->current_location.sceneid);
+	const char *state;
+	switch (target->player->current_scene_load_state) {
+		case SceneLoadState::DONE: state = "done";
+		case SceneLoadState::LOADING_NEW_SCENE: state = "loading new scene";
+		case SceneLoadState::LOADING_SAME_SCENE: state = "loading same scene";
 	}
+	soggy_log("sceneid=%d (%s)", target->player->current_location.sceneid, state);
 	soggy_log("pos x=%.3f y=%.3f z=%.3f", target->player->current_location.pos.x, target->player->current_location.pos.y, target->player->current_location.pos.z);
 	soggy_log("rot x=%.3f y=%.3f z=%.3f", target->player->current_location.rot.x, target->player->current_location.rot.y, target->player->current_location.rot.z);
 }
@@ -2047,6 +2121,7 @@ void interactive_main() {
 			soggy_rx.emulate_key_press(replxx::Replxx::KEY::control('K'));
 			soggy_rx.emulate_key_press(replxx::Replxx::KEY::control('D'));
 		});
+		interrupt_dispatch_server();
 		interrupt.join();
 	});
 
@@ -2055,7 +2130,7 @@ void interactive_main() {
 		soggy_rx.history_load(historyf);
 	}
 
-	while (go) {
+	while (!queued_shutdown) {
 		const char *line;
 		do {
 			line = soggy_rx.input("\x1b[90msoggy > \x1b[0m");
@@ -2067,7 +2142,7 @@ void interactive_main() {
 			}
 		} else {
 			printf("EOF\n");
-			go = false;
+			soggy_shutdown();
 		}
 	}
 
@@ -2091,10 +2166,15 @@ void non_interactive_main() {
 }
 
 int main(int argc, char *argv[]) {
-	puts("\x1b[1m░\x1b[0m Soggy is free software: you can redistribute it and/or modify it under the terms of");
-	puts("\x1b[1m░\x1b[0m   the GNU Affero General Public License as published by the Free Software Foundation,");
-	puts("\x1b[1m░\x1b[0m   either version 3 of the License, or (at your option) any later version.");
-	puts("\x1b[1m░\x1b[0m Homepage: https://github.com/LDAsuku/soggy");
+	puts("█ Soggy is free software: you can redistribute it and/or modify it under the terms of");
+	puts("█   the GNU Affero General Public License as published by the Free Software Foundation,");
+	puts("█   either version 3 of the License, or (at your option) any later version.");
+	puts("█ Homepage: https://github.com/LDAsuku/soggy");
+
+	if (soggy_load_config_file("soggy.cfg") == -1) {
+		soggy_log("error: config file soggy.cfg not found");
+		return 1;
+	}
 
 	if (load_game_data()) {
 		soggy_log("error loading resources");
@@ -2103,23 +2183,8 @@ int main(int argc, char *argv[]) {
 
 	init_mainplayer(); // initialize a demo player
 
-	enet_initialize();
-
-	ENetAddress addr;
-	addr.host = ENET_HOST_ANY;
-	addr.port = 22102;
-
-	host = enet_host_create(&addr, /*peerCount*/ 1, /*channelLimit*/ 0, /*incomingBandwidth*/ 0, /*outgoingBandwidth*/ 0);
-	if (host == NULL) {
-		print_socket_error("enet_create_host");
-		return 1;
-	}
-	enet_host_compress_with_range_coder(host);
-	host->checksum = enet_crc32;
-
-	soggy_log("game listening on port %d", addr.port);
-
 	std::thread game_server(&game_server_main);
+	std::thread dispatch_server(&dispatch_server_main);
 
 	if (isatty(fileno(stdout))) {
 		interactive_main();
@@ -2127,10 +2192,9 @@ int main(int argc, char *argv[]) {
 		non_interactive_main();
 	}
 
-	go = false;
+	soggy_shutdown();
 	game_server.join();
-
-	exit_handler();
+	dispatch_server.join();
 
 	printf("exit\n");
 
