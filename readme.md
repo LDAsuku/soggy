@@ -44,6 +44,7 @@ cmake -B build -G "Unix Makefiles"
 # build
 cmake --build build -j8
 ```
+Detailed build guide available [here](https://github.com/wiors/soggy/wiki/Get-started-with-MingW64).
 
 ## Running
 
@@ -52,6 +53,10 @@ Put the `resources` directory and `soggy.cfg` in the current working directory a
 `dispatch.py` is obsolete. The game server has a built-in dispatch server now.
 
 Resources can be found on the repo wiki.
+
+## Troubleshooting
+
+If after logging in and clicking Tap to begin an next error occurs: `<uid:1-time:1671269113657[0,0,0]>FormatException: Unknown char: . `, just select English as the system language and try again.
 
 ## Client patches
 
