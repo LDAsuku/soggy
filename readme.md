@@ -44,6 +44,7 @@ cmake -B build -G "Unix Makefiles"
 # build
 cmake --build build -j8
 ```
+Detailed build guide available [here](https://github.com/wiors/soggy/wiki/Get-started-with-MingW64).
 
 ## Running
 
