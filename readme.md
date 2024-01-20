@@ -2,7 +2,7 @@
 
 Experimental server emulator for a game I forgot its name 💀
 
-![soggy cat](static/soggy_cat.png "soggy cat")
+![image](https://github.com/LDAsuku/soggy/assets/147954091/75f52542-3f39-4367-9e66-d3cd7610876f)
 
 [Setup & Documentation](https://nitter.pussthecat.org/sillysoggycat/)
 
